@@ -52,6 +52,19 @@ a generic tech-mod clone.
    electric mods interop with — plus a rotational↔FE converter block for
    direct Create kinetic-stress integration. Create is a soft/optional
    integration point, not a hard dependency.
+6. **Recipes**: progression-tiered using vanilla materials first, and
+   deliberately distinct from other tech mods' signature recipes so this
+   doesn't read as a reskin.
+   - Lean on vanilla materials before inventing custom alloys/ingots: copper
+     (already the strike-catching tier vanilla established via lightning
+     rods) for entry-level parts, iron/redstone for wiring and basic FE
+     handling, amethyst for anything wireless/resonant — it already carries
+     a "signal/vibration" association in vanilla via sculk sensors, so it
+     fits the tesla coils' wireless transmission thematically — gold/diamond
+     reserved for higher tiers.
+   - Avoid shapes/ingredient sets that closely mirror other popular tech
+     mods' machine-frame recipes (Mekanism, Immersive Engineering, Create,
+     Applied Energistics) to keep this from clashing or reading derivative.
 
 ## Phase 1 — MVP
 
@@ -64,6 +77,14 @@ Everything else depends on this existing first.
       world-generated) that charges when a strike lands on/near it or is
       routed through a connected rod. Converts strike energy directly into
       stored FE.
+- [ ] Capacitor visual: transparent shell with lightning arcing/bouncing
+      inside, visibly condensing/settling as charge climbs toward full.
+- [ ] Capacitor overload/rupture: if strike energy comes in faster than the
+      capacitor's contain rate (over capacity, or nothing drawing power off
+      it fast enough), it ruptures — explodes and releases a live ball
+      lightning entity as a hazard. First appearance of "ball lightning" as
+      a capacitor failure state, ahead of the standalone weather-phenomenon
+      version in the backlog below.
 - [ ] Basic FE storage/output so the capacitor can power something, proving
       the power spine end-to-end.
 
@@ -76,17 +97,32 @@ Everything else depends on this existing first.
         (mobs/players) that get close.
 - [ ] Chain armor rework: acts as an insulator/Faraday cage, letting the
       wearer safely stand near active large tesla coils.
-- [ ] Rotational↔FE converter block for Create integration.
 
 ## Phase 3 — low-tier / flavor power source
 
 - [ ] Sheep static pins: penned sheep generate a tiny trickle of static
       charge (wool friction) — early-game power source that doesn't require
       a storm.
+- [ ] Cats as an additional static source: real-world cat fur builds static
+      too — petting/rubbing interaction (or cats loitering in/near the pen)
+      contributes a small charge alongside the sheep mechanic.
+
+## Phase 4 — mod compatibility & integration (end of project)
+
+Deliberately last: get the mod's own mechanics right on their own first,
+then build interop once the core is stable rather than designing around
+other mods' APIs from day one.
+
+- [ ] Rotational↔FE converter block for Create integration (moved here from
+      Phase 2 — Create compat waits until the core spine works standalone).
+- [ ] Create: New Age compat.
+- [ ] Other FE-based power mods as they come up (e.g. Mekanism, Immersive
+      Engineering) — energy interop, not full feature parity.
 
 ## Backlog (explicitly later, not in early scope)
 
-- Ball lightning: new standalone weather phenomenon.
+- Ball lightning as a standalone weather phenomenon (independent of capacitor
+  overload — see Phase 1 for its first appearance as a failure state).
 - Handheld gun weapon with a ball-lightning attachment/ammo variant.
 
 ## Open questions to resolve as building starts
@@ -101,6 +137,8 @@ Everything else depends on this existing first.
   one place).
 - Block/item designs for the capacitor, tesla coils, and converter (visual
   design not yet started).
+- Exact recipe shapes/ingredient costs per block, once block designs are
+  locked (see recipe principles in locked decision 6).
 - Final mod name/branding (currently "Playing With Static").
 
 ## Build steps
