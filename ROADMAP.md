@@ -211,9 +211,18 @@ Deliberately framed as a rare, devastating event, not a routine hazard.
 
 ## Phase 3 — low-tier / flavor power source
 
+- [ ] Static collector: a block that wraps around a placed copper lightning
+      rod (own model added — geometry only for now, same as the capacitor).
+      Generates power but does **not** store it — a very low, passive
+      trickle fed by ambient static in its immediate surroundings: mobs
+      walking on/near it, carpet, and other nearby items. Storm-independent,
+      like the sheep/cat sources below, and feeds whatever the rod is
+      connected to (a capacitor) rather than holding charge itself.
 - [ ] Sheep static pins: penned sheep generate a tiny trickle of static
       charge (wool friction) — early-game power source that doesn't require
-      a storm.
+      a storm. Read as the *concentrated* case of the static collector's
+      general mechanism above (pen sheep next to a rod+collector to boost
+      its yield), not a separate system.
 - [ ] Cats as an additional static source: real-world cat fur builds static
       too — petting/rubbing interaction (or cats loitering in/near the pen)
       contributes a small charge alongside the sheep mechanic.

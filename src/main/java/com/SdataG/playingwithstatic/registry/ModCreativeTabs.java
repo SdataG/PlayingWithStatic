@@ -9,7 +9,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 
-/** Puts the capacitor in the vanilla Redstone Blocks tab for now, next to the vanilla lightning rod. */
+/** Puts our blocks in the vanilla Redstone Blocks tab for now, next to the vanilla lightning rod. */
 @EventBusSubscriber(modid = PlayingWithStatic.MOD_ID)
 public final class ModCreativeTabs {
 
@@ -24,6 +24,10 @@ public final class ModCreativeTabs {
         event.insertAfter(
                 new ItemStack(Items.LIGHTNING_ROD),
                 new ItemStack(ModBlocks.CAPACITOR_ITEM.get()),
+                CreativeModeTab.TabVisibility.PARENT_AND_SEARCH_TABS);
+        event.insertAfter(
+                new ItemStack(ModBlocks.CAPACITOR_ITEM.get()),
+                new ItemStack(ModBlocks.STATIC_COLLECTOR_ITEM.get()),
                 CreativeModeTab.TabVisibility.PARENT_AND_SEARCH_TABS);
     }
 }
