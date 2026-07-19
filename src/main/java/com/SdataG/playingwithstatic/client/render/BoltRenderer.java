@@ -35,26 +35,27 @@ public final class BoltRenderer {
     /** Roughly one jag point per this many blocks of length. Small = finer, twitchier lightning. */
     private static final float SEGMENT_LENGTH = 0.5F;
 
-    /** How far mid-path jag points wander off the channel. */
-    private static final float JAG = 0.20F;
+    /** How far mid-path jag points wander off the channel. 2x Sunwell's original 0.20. */
+    private static final float JAG = 0.40F;
 
     /** Arc bow sideways, as a fraction of the channel's total (vertical) length -- top and bottom
      *  share the same X/Z, so this is what actually gives the channel its arch instead of a razor-
      *  straight drop; the branches fork off this same bowed path. Floored and capped so a very short
-     *  or very tall drop still reads as a proper arc rather than none at all or an absurd sideways lean. */
-    private static final float BOW_FRACTION = 0.15F;
-    private static final float BOW_MIN = 0.6F;
-    private static final float BOW_MAX = 16.0F;
+     *  or very tall drop still reads as a proper arc rather than none at all or an absurd sideways lean.
+     *  Fraction/min/max all 2x their first pass. */
+    private static final float BOW_FRACTION = 0.30F;
+    private static final float BOW_MIN = 0.7F;
+    private static final float BOW_MAX = 32.0F;
 
-    /** Thin bright core, soft glow, and a wide luminous bloom (the photo look). Scaled up ~1.6x over
-     *  Sunwell's original values -- a sky-to-ground bolt reads much smaller relative to open-air view
-     *  distance than Sunwell's short lamp-to-ceiling one did, so it needs to be visually thicker to
-     *  read at all from a normal viewing distance. */
-    private static final float CORE_WIDTH = 0.055F;
+    /** Thin bright core, soft glow, and a wide luminous bloom (the photo look). Whole effect is 2x
+     *  Sunwell's original SunwellBoltRenderer sizing (0.035/0.018/0.13/0.42) -- a sky-to-ground bolt
+     *  reads much smaller relative to open-air view distance than Sunwell's short lamp-to-ceiling one
+     *  did, so it needs to be visually much thicker to read at all from a normal viewing distance. */
+    private static final float CORE_WIDTH = 0.07F;
     /** Inner hyper-bright filament, thinner than the core -- fakes a bloom right at the white-hot centre. */
-    private static final float CORE_HOT_WIDTH = 0.03F;
-    private static final float HALO_WIDTH = 0.22F;
-    private static final float BLOOM_WIDTH = 0.65F;
+    private static final float CORE_HOT_WIDTH = 0.036F;
+    private static final float HALO_WIDTH = 0.26F;
+    private static final float BLOOM_WIDTH = 0.84F;
 
     /** How far above the strike the leader visually originates from. Capped by the level's actual
      *  build height so it never reaches for a point that doesn't exist (e.g. the Nether). */
@@ -162,10 +163,11 @@ public final class BoltRenderer {
         drawChannel(buffer, matrix, path, sides, CORE_HOT_WIDTH, 1.0F, 1.0F, 1.0F, reach, baseA * 1.7F, pulseC, pulseW, pulseA * 2.2F, closeFrac);
 
         if (pulseA > 0.0F) {
+            // 2x Sunwell's original 1.7/0.75.
             int pulseIdx = Mth.clamp(Math.round(pulseC * (path.length - 1)), 0, path.length - 1);
             Vector3f pulsePos = path[pulseIdx];
-            drawGlow(buffer, matrix, camera, pulsePos, 1.7F, 0.55F, 0.85F, 0.92F, 1.0F);
-            drawGlow(buffer, matrix, camera, pulsePos, 0.75F, 1.0F, 1.0F, 1.0F, 1.0F);
+            drawGlow(buffer, matrix, camera, pulsePos, 3.4F, 0.55F, 0.85F, 0.92F, 1.0F);
+            drawGlow(buffer, matrix, camera, pulsePos, 1.5F, 1.0F, 1.0F, 1.0F, 1.0F);
         }
 
         if (branchBright > 0.05F) {
@@ -174,17 +176,18 @@ public final class BoltRenderer {
         }
 
         // Sky-end glow: brightens as the leader charges down, flares at the strike, then fades.
-        drawGlow(buffer, matrix, camera, path[0], 0.55F, skyGlow * 0.45F, 0.7F, 0.82F, 1.0F);
-        drawGlow(buffer, matrix, camera, path[0], 0.26F, skyGlow, 0.96F, 0.98F, 1.0F);
+        // 2x Sunwell's original 0.55/0.26.
+        drawGlow(buffer, matrix, camera, path[0], 1.1F, skyGlow * 0.45F, 0.7F, 0.82F, 1.0F);
+        drawGlow(buffer, matrix, camera, path[0], 0.52F, skyGlow, 0.96F, 0.98F, 1.0F);
 
         if (impactLight > 0.02F) {
-            // Strike-point bloom, scaled up well beyond the channel-width bump above -- this is the
-            // single biggest, most important flash in the whole VFX (the moment it actually lands) and
-            // needs to read from far outside the immediate strike area, not just be a bright dot.
+            // Strike-point bloom: 2x Sunwell's original 2.2/1.1/0.45. This is the single biggest, most
+            // important flash in the whole VFX (the moment it actually lands) and needs to read from far
+            // outside the immediate strike area, not just be a bright dot.
             Vector3f strikePoint = path[path.length - 1];
-            drawGlow(buffer, matrix, camera, strikePoint, 3.6F, impactLight * 0.35F, 0.65F, 0.78F, 1.0F);
-            drawGlow(buffer, matrix, camera, strikePoint, 1.9F, impactLight * 0.8F, 0.8F, 0.88F, 1.0F);
-            drawGlow(buffer, matrix, camera, strikePoint, 0.8F, impactLight * 1.4F, 1.0F, 1.0F, 1.0F);
+            drawGlow(buffer, matrix, camera, strikePoint, 4.4F, impactLight * 0.35F, 0.65F, 0.78F, 1.0F);
+            drawGlow(buffer, matrix, camera, strikePoint, 2.2F, impactLight * 0.8F, 0.8F, 0.88F, 1.0F);
+            drawGlow(buffer, matrix, camera, strikePoint, 0.9F, impactLight * 1.4F, 1.0F, 1.0F, 1.0F);
         }
         return true;
     }
@@ -334,8 +337,11 @@ public final class BoltRenderer {
     private static final float REACH_MARGIN = 0.25F;
 
     private static final float BRANCH_GROWTH = 0.35F;
-    private static final float BRANCH_LEN_REFERENCE = 2.0F;
-    private static final float SUB_LEN_REFERENCE = 1.0F;
+    // 2x Sunwell's original reference lengths, so growth-speed pacing stays calibrated the same
+    // relative to the now-2x branch lengths below instead of every branch reading as "far away, lash
+    // out fast" once lengths doubled but the references classifying near/far didn't.
+    private static final float BRANCH_LEN_REFERENCE = 4.0F;
+    private static final float SUB_LEN_REFERENCE = 2.0F;
     private static final float BRANCH_GROWTH_MIN = 0.12F;
     private static final float BRANCH_GROWTH_MAX = 0.9F;
 
@@ -369,9 +375,9 @@ public final class BoltRenderer {
             Vector3f dir = new Vector3f(tan).mul(forward).add(out.mul(spread));
             dir.add(0.0F, -0.3F, 0.0F).normalize();
             float topFactor = 1.0F - originFrac;
-            // Scaled up alongside the channel width above, so branches read proportionally as long as
-            // the main channel now reads thick, instead of looking stubby next to a bigger core.
-            float len = (2.4F + random.nextFloat() * 3.6F) * (0.65F + topFactor * 1.15F);
+            // 2x Sunwell's original (1.6 + rand*2.4) base length, so branches read proportionally as
+            // long as the main channel now reads thick, instead of looking stubby next to a bigger core.
+            float len = (3.2F + random.nextFloat() * 4.8F) * (0.65F + topFactor * 1.15F);
             int branchDepth = topFactor > 0.6F ? 3 : (topFactor > 0.35F ? 2 : (topFactor > 0.15F ? 1 : 0));
 
             Vector3f bestDir = dir;
