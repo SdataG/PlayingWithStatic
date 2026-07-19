@@ -246,6 +246,15 @@ other mods' APIs from day one.
 - [ ] Create: New Age compat.
 - [ ] Other FE-based power mods as they come up (e.g. Mekanism, Immersive
       Engineering) — energy interop, not full feature parity.
+- [ ] Sunwell compat: both mods redirect the identical
+      `Level.playLocalSound` call on `LightningBolt.tick` to retime thunder
+      to their own strike moment. `@Redirect` claims a specific instruction
+      — only one mod can win it. Currently both sides are `require = 0` so
+      losing the race degrades to doubled thunder instead of crashing (this
+      crashed the game before that fix — see build history), but the real
+      fix is coordinating which mod owns the redirect, or restructuring so
+      they don't collide at all (e.g. one mod detects the other's presence
+      and defers).
 
 ## Backlog (explicitly later, not in early scope)
 
