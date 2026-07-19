@@ -8,10 +8,17 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.LightningBolt;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
+
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * The mod's own lightning: a jagged branching bolt that leaps down from directly above the strike
@@ -72,6 +79,82 @@ public final class BoltRenderer {
     /** The tick the return stroke lands on — when the thunder/impact sound should play. */
     public static final int STRIKE_TICK = Math.round(LEADER_END * LIFE_TICKS);
 
+    /** How far out (blocks) to look for a copper lightning rod for branches to reach toward. One-time
+     *  cost per bolt (cached, see {@link #targetsFor}), not per frame/branch, so this can afford to be
+     *  generous. */
+    private static final float ROD_SEEK_RADIUS = 12.0F;
+
+    /** How much a rod-ward candidate direction's measured clearance is multiplied by when competing
+     *  against the other candidate directions in {@link #drawBranches} -- makes branches noticeably
+     *  more likely to reach for a nearby rod without making it a certainty; a direction with genuinely
+     *  more open room can still win. */
+    private static final float ROD_MAGNETISM = 1.6F;
+
+    /** Horizontal search radius for mobs/players branches should visibly react to, same as blocks.
+     *  Vertical range is the full sky-origin height, since branches can occur anywhere along it. */
+    private static final float ENTITY_SEEK_RADIUS = 20.0F;
+
+    /**
+     * What a bolt's branches should visually reach for or stop at, beyond plain block collision:
+     * the nearest copper rod (if any, for the rod-attraction bias) and nearby living entities (mobs,
+     * players -- so a branch stops at them the same way it stops at a wall, instead of visibly passing
+     * straight through). Cosmetic only, per locked decision 2 -- the actual strike position is already
+     * decided by vanilla before this renderer ever runs.
+     */
+    private record BranchTargets(BlockPos rod, List<AABB> nearbyLiving) {
+    }
+
+    /** Computed once per bolt (its first rendered frame) and reused for the rest of its life --
+     *  querying the world for a rod and nearby entities is real cost, and doesn't need doing every
+     *  frame for a ~0.5s effect. Cleared alongside {@link BoltFlashLight#clear}. */
+    private static final Map<Integer, BranchTargets> TARGET_CACHE = new ConcurrentHashMap<>();
+
+    private static BranchTargets targetsFor(LightningBolt bolt) {
+        return TARGET_CACHE.computeIfAbsent(bolt.getId(), id -> {
+            Level level = bolt.level();
+            BlockPos strike = bolt.blockPosition();
+            BlockPos rod = findNearestRod(level, strike, ROD_SEEK_RADIUS);
+            int r = (int) ENTITY_SEEK_RADIUS;
+            AABB searchBox = new AABB(
+                    strike.getX() - r, strike.getY(), strike.getZ() - r,
+                    strike.getX() + 1 + r, strike.getY() + SKY_HEIGHT_ABOVE, strike.getZ() + 1 + r);
+            List<AABB> living = level.getEntitiesOfClass(LivingEntity.class, searchBox)
+                    .stream()
+                    .map(LivingEntity::getBoundingBox)
+                    .toList();
+            return new BranchTargets(rod, living);
+        });
+    }
+
+    private static void clearTargets(int boltId) {
+        TARGET_CACHE.remove(boltId);
+    }
+
+    /** Nearest {@code minecraft:lightning_rod} to {@code center} within {@code radius}, or null. A
+     *  one-time cube scan, cached per bolt (see {@link #targetsFor}) rather than run every frame. */
+    private static BlockPos findNearestRod(Level level, BlockPos center, float radius) {
+        int r = (int) radius;
+        BlockPos best = null;
+        double bestDistSq = Double.MAX_VALUE;
+        BlockPos.MutableBlockPos probe = new BlockPos.MutableBlockPos();
+        for (int dx = -r; dx <= r; dx++) {
+            for (int dy = -r; dy <= r; dy++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    probe.set(center.getX() + dx, center.getY() + dy, center.getZ() + dz);
+                    if (!level.isLoaded(probe) || !level.getBlockState(probe).is(Blocks.LIGHTNING_ROD)) {
+                        continue;
+                    }
+                    double distSq = probe.distSqr(center);
+                    if (distSq < bestDistSq) {
+                        bestDistSq = distSq;
+                        best = probe.immutable();
+                    }
+                }
+            }
+        }
+        return best;
+    }
+
     private BoltRenderer() {
     }
 
@@ -97,6 +180,7 @@ public final class BoltRenderer {
         float t = age / LIFE_TICKS;
         if (t >= 1.0F) {
             BoltFlashLight.clear(bolt.getId()); // spent -- release its in-world light immediately
+            clearTargets(bolt.getId());
             return true; // ours, but spent -- draw nothing rather than let vanilla back in
         }
         float flick = 0.7F + 0.3F * Mth.abs(Mth.sin(age * 15.0F));
@@ -172,7 +256,8 @@ public final class BoltRenderer {
 
         if (branchBright > 0.05F) {
             Vector3f boltWorldPos = new Vector3f((float) bolt.getX(), (float) bolt.getY(), (float) bolt.getZ());
-            drawBranches(buffer, matrix, camera, random, path, branchBright, reach, level, boltWorldPos, closeFrac);
+            BranchTargets targets = targetsFor(bolt);
+            drawBranches(buffer, matrix, camera, random, path, branchBright, reach, level, boltWorldPos, closeFrac, targets);
         }
 
         // Sky-end glow: brightens as the leader charges down, flares at the strike, then fades.
@@ -348,13 +433,15 @@ public final class BoltRenderer {
     /**
      * Forks off the main channel: several primary branches from the upper three-quarters, each
      * spawning its own smaller sub-branches, all angling down and out and fading. World-aware: each
-     * primary samples a couple of nearby directions and keeps whichever has the most open room ahead
-     * of it, then its length is clipped to stop right where it actually reaches a block -- surface-
-     * seeking flavor per locked decision 2, cosmetic only, not real targeting.
+     * primary samples a couple of nearby directions (plus a rod-ward one if a copper rod is nearby,
+     * weighted by {@link #ROD_MAGNETISM} -- likely to win, not guaranteed, so a branch can still reach
+     * away from the rod less often) and keeps whichever has the most open room ahead of it, then its
+     * length is clipped to stop right where it actually reaches a block or a nearby living entity --
+     * surface-seeking flavor per locked decision 2, cosmetic only, not real targeting.
      */
     private static void drawBranches(VertexConsumer buffer, Matrix4f matrix, Vector3f camera, RandomSource random,
                                      Vector3f[] path, float bright, float reach, Level level, Vector3f worldOrigin,
-                                     float closeFrac) {
+                                     float closeFrac, BranchTargets targets) {
         int last = path.length - 1;
         int count = 4 + random.nextInt(4); // 4-7 primaries, fixed by the seed
         for (int i = 0; i < count; i++) {
@@ -381,16 +468,33 @@ public final class BoltRenderer {
             int branchDepth = topFactor > 0.6F ? 3 : (topFactor > 0.35F ? 2 : (topFactor > 0.15F ? 1 : 0));
 
             Vector3f bestDir = dir;
-            float bestClear = clearDistance(level, worldOrigin, path[oi], dir, len);
+            float bestClear = clearDistance(level, worldOrigin, path[oi], dir, len, targets.nearbyLiving());
             for (int c = 0; c < 2; c++) {
                 float jitterAng = ang + (random.nextFloat() - 0.5F) * 1.6F;
                 Vector3f jOut = new Vector3f(perpA).mul((float) Math.cos(jitterAng)).add(perpB.mul((float) Math.sin(jitterAng)));
                 Vector3f jDir = new Vector3f(tan).mul(forward).add(jOut.mul(spread));
                 jDir.add(0.0F, -0.3F, 0.0F).normalize();
-                float clear = clearDistance(level, worldOrigin, path[oi], jDir, len);
+                float clear = clearDistance(level, worldOrigin, path[oi], jDir, len, targets.nearbyLiving());
                 if (clear > bestClear) {
                     bestClear = clear;
                     bestDir = jDir;
+                }
+            }
+            // Rod attraction: a copper rod nearby competes as its own candidate direction, not
+            // restricted to the jitter arc above -- so a branch can genuinely reach across toward a
+            // rod rather than only ever wobbling near its original forking angle. Weighted, not forced.
+            if (targets.rod() != null) {
+                Vector3f rodDir = new Vector3f(
+                        (float) (targets.rod().getX() + 0.5D) - (worldOrigin.x + path[oi].x),
+                        (float) (targets.rod().getY() + 0.5D) - (worldOrigin.y + path[oi].y),
+                        (float) (targets.rod().getZ() + 0.5D) - (worldOrigin.z + path[oi].z));
+                if (rodDir.lengthSquared() > 1.0E-6F) {
+                    rodDir.normalize();
+                    float rodClear = clearDistance(level, worldOrigin, path[oi], rodDir, len, targets.nearbyLiving());
+                    if (rodClear * ROD_MAGNETISM > bestClear) {
+                        bestClear = rodClear;
+                        bestDir = rodDir;
+                    }
                 }
             }
             dir = bestDir;
@@ -400,13 +504,13 @@ public final class BoltRenderer {
             float width = CORE_WIDTH * (0.65F + random.nextFloat() * 0.6F);
             float branchCloseMul = Mth.clamp(1.0F - closeFrac * originFrac * 1.4F, 0.0F, 1.0F);
             drawFork(buffer, matrix, camera, random, path[oi], dir, len, width, bright * branchCloseMul,
-                    branchDepth, growth, level, worldOrigin);
+                    branchDepth, growth, level, worldOrigin, targets.nearbyLiving());
         }
     }
 
     private static void drawFork(VertexConsumer buffer, Matrix4f matrix, Vector3f camera, RandomSource random,
                                  Vector3f from, Vector3f dir, float length, float width, float bright, int depth,
-                                 float growth, Level level, Vector3f worldOrigin) {
+                                 float growth, Level level, Vector3f worldOrigin, List<AABB> nearbyLiving) {
         int steps = Math.max(2, Mth.ceil(length / SEGMENT_LENGTH));
         Vector3f end = new Vector3f(from).add(new Vector3f(dir).mul(length));
         Vector3f[] pts = new Vector3f[steps + 1];
@@ -434,22 +538,25 @@ public final class BoltRenderer {
                         -0.15F - 0.2F * random.nextFloat(),
                         (random.nextFloat() - 0.5F) * 0.8F).normalize();
                 float rolledSubLen = length * (0.35F + 0.3F * random.nextFloat());
-                float subLen = Math.min(clearDistance(level, worldOrigin, origin, sub, rolledSubLen), rolledSubLen);
+                float subLen = Math.min(clearDistance(level, worldOrigin, origin, sub, rolledSubLen, nearbyLiving), rolledSubLen);
                 float subWindow = Mth.clamp(0.65F * (SUB_LEN_REFERENCE / Math.max(subLen, 0.3F)),
                         BRANCH_GROWTH_MIN, BRANCH_GROWTH_MAX);
                 float subGrowth = Mth.clamp((growth - (1.0F - subWindow)) / subWindow, 0.0F, 1.0F);
                 drawFork(buffer, matrix, camera, random, origin, sub,
-                        subLen, width * 0.62F, bright * 0.6F, depth - 1, subGrowth, level, worldOrigin);
+                        subLen, width * 0.62F, bright * 0.6F, depth - 1, subGrowth, level, worldOrigin, nearbyLiving);
             }
         }
     }
 
     /**
      * How far (in blocks) a ray from LOCAL point {@code from} along {@code dir} can travel before
-     * hitting a solid block, capped at {@code max}. Fixed-step sampling -- cheap and good enough for a
-     * decorative, once-per-branch query, not exact voxel traversal.
+     * hitting a solid block OR one of {@code nearbyLiving}'s bounding boxes (a mob or player -- so a
+     * branch visibly stops at them instead of passing straight through, the same way it already stops
+     * at a wall or a tree), capped at {@code max}. Fixed-step sampling -- cheap and good enough for a
+     * decorative, once-per-branch query, not exact voxel/entity traversal.
      */
-    private static float clearDistance(Level level, Vector3f worldOrigin, Vector3f from, Vector3f dir, float max) {
+    private static float clearDistance(Level level, Vector3f worldOrigin, Vector3f from, Vector3f dir, float max,
+                                       List<AABB> nearbyLiving) {
         float step = 0.4F;
         BlockPos.MutableBlockPos probe = new BlockPos.MutableBlockPos();
         for (float d = step; d <= max; d += step) {
@@ -460,6 +567,11 @@ public final class BoltRenderer {
             BlockState state = level.getBlockState(probe);
             if (!state.getCollisionShape(level, probe).isEmpty()) {
                 return Math.max(0.0F, d - step - REACH_MARGIN);
+            }
+            for (int e = 0; e < nearbyLiving.size(); e++) {
+                if (nearbyLiving.get(e).contains(x, y, z)) {
+                    return Math.max(0.0F, d - step - REACH_MARGIN);
+                }
             }
         }
         return max;

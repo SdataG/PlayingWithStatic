@@ -57,7 +57,13 @@ how much power they're chasing, not a fixed late-game unlock.
    final, rod-aware target. Mixin-cancel vanilla's render of that entity and
    only render a custom growth animation from sky down to the entity's
    already-known position; branches during growth stay cosmetic
-   surface-seeking flavor, not real targeting.
+   surface-seeking flavor, not real targeting — implemented (see Phase 1)
+   as: a branch raycasts against block collision *and* nearby living
+   entities (mobs/players), stopping at whichever it reaches first instead
+   of visibly passing through a mob or player the way it would through
+   thin air; and if a copper rod is within range, branches are weighted
+   (not forced) to reach toward it, so a rod nearby noticeably pulls
+   branches its way but a branch can still land elsewhere less often.
    What *is* added: a frequency multiplier layered on top of vanilla's
    per-chunk-per-tick strike roll, biased by terrain — mountains, plateaus,
    and high plains get struck more often; low-elevation/sheltered terrain
@@ -121,7 +127,9 @@ how much power they're chasing, not a fixed late-game unlock.
 
 Everything else depends on this existing first.
 
-- [ ] Branching sky-to-surface lightning VFX (per locked decisions above).
+- [x] Branching sky-to-surface lightning VFX (per locked decisions above) —
+      implemented, including entity-aware branch reach and rod-attraction
+      bias (decision 2).
 - [ ] Terrain-aware strike frequency: hook vanilla's per-chunk-per-tick
       strike roll and apply a terrain-based multiplier during storms —
       boosted for mountains, plateaus, and high plains; standard or reduced
