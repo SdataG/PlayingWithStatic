@@ -46,12 +46,15 @@ public final class BoltRenderer {
     private static final float BOW_MIN = 0.6F;
     private static final float BOW_MAX = 16.0F;
 
-    /** Thin bright core, soft glow, and a wide luminous bloom (the photo look). */
-    private static final float CORE_WIDTH = 0.035F;
+    /** Thin bright core, soft glow, and a wide luminous bloom (the photo look). Scaled up ~1.6x over
+     *  Sunwell's original values -- a sky-to-ground bolt reads much smaller relative to open-air view
+     *  distance than Sunwell's short lamp-to-ceiling one did, so it needs to be visually thicker to
+     *  read at all from a normal viewing distance. */
+    private static final float CORE_WIDTH = 0.055F;
     /** Inner hyper-bright filament, thinner than the core -- fakes a bloom right at the white-hot centre. */
-    private static final float CORE_HOT_WIDTH = 0.018F;
-    private static final float HALO_WIDTH = 0.13F;
-    private static final float BLOOM_WIDTH = 0.42F;
+    private static final float CORE_HOT_WIDTH = 0.03F;
+    private static final float HALO_WIDTH = 0.22F;
+    private static final float BLOOM_WIDTH = 0.65F;
 
     /** How far above the strike the leader visually originates from. Capped by the level's actual
      *  build height so it never reaches for a point that doesn't exist (e.g. the Nether). */
@@ -175,10 +178,13 @@ public final class BoltRenderer {
         drawGlow(buffer, matrix, camera, path[0], 0.26F, skyGlow, 0.96F, 0.98F, 1.0F);
 
         if (impactLight > 0.02F) {
+            // Strike-point bloom, scaled up well beyond the channel-width bump above -- this is the
+            // single biggest, most important flash in the whole VFX (the moment it actually lands) and
+            // needs to read from far outside the immediate strike area, not just be a bright dot.
             Vector3f strikePoint = path[path.length - 1];
-            drawGlow(buffer, matrix, camera, strikePoint, 2.2F, impactLight * 0.35F, 0.65F, 0.78F, 1.0F);
-            drawGlow(buffer, matrix, camera, strikePoint, 1.1F, impactLight * 0.8F, 0.8F, 0.88F, 1.0F);
-            drawGlow(buffer, matrix, camera, strikePoint, 0.45F, impactLight * 1.4F, 1.0F, 1.0F, 1.0F);
+            drawGlow(buffer, matrix, camera, strikePoint, 3.6F, impactLight * 0.35F, 0.65F, 0.78F, 1.0F);
+            drawGlow(buffer, matrix, camera, strikePoint, 1.9F, impactLight * 0.8F, 0.8F, 0.88F, 1.0F);
+            drawGlow(buffer, matrix, camera, strikePoint, 0.8F, impactLight * 1.4F, 1.0F, 1.0F, 1.0F);
         }
         return true;
     }
@@ -363,7 +369,9 @@ public final class BoltRenderer {
             Vector3f dir = new Vector3f(tan).mul(forward).add(out.mul(spread));
             dir.add(0.0F, -0.3F, 0.0F).normalize();
             float topFactor = 1.0F - originFrac;
-            float len = (1.6F + random.nextFloat() * 2.4F) * (0.65F + topFactor * 1.15F);
+            // Scaled up alongside the channel width above, so branches read proportionally as long as
+            // the main channel now reads thick, instead of looking stubby next to a bigger core.
+            float len = (2.4F + random.nextFloat() * 3.6F) * (0.65F + topFactor * 1.15F);
             int branchDepth = topFactor > 0.6F ? 3 : (topFactor > 0.35F ? 2 : (topFactor > 0.15F ? 1 : 0));
 
             Vector3f bestDir = dir;
