@@ -21,8 +21,8 @@ a generic tech-mod clone.
 Balance philosophy: a real strike delivers a lot of power but is rare and
 storm-gated (vanilla frequency, not reimplemented — see locked decision 2),
 so the power spine rewards infrastructure built to catch and hold an
-uncertain, bursty supply — capacitor banks, overflow handling — rather than
-steady drip-feed generation like most tech mods' generators.
+uncertain, bursty supply — cage battery banks, overflow handling — rather
+than steady drip-feed generation like most tech mods' generators.
 
 Plays like a reactor, but an *early*-game one: a single copper rod and
 capacitor is cheap and gets you a huge burst of power the moment a storm
@@ -86,12 +86,36 @@ how much power they're chasing, not a fixed late-game unlock.
    - Avoid shapes/ingredient sets that closely mirror other popular tech
      mods' machine-frame recipes (Mekanism, Immersive Engineering, Create,
      Applied Energistics) to keep this from clashing or reading derivative.
-7. **Multiblock construction.** Most Phase 2+ devices (tesla coils,
-   capacitor banks, induction pads, redstone bridge, voltmeter) are built by
+7. **Multiblock construction.** Most Phase 2+ devices (tesla coils, cage
+   battery banks, induction pads, redstone bridge, voltmeter) are built by
    assembling smaller component blocks into a multiblock, not delivered as a
    single always-on block. This is also how capacity scales — a bank is
-   several capacitor blocks linked together, not one block with a bigger
+   several cage battery blocks linked together, not one block with a bigger
    number.
+8. **Overflow explosion is capability-based, not mod-specific.** The
+   capacitor (locked decision 5's power spine, detailed in Phase 1) has
+   effectively infinite intake but must keep draining what it takes in —
+   into our cage battery, or into any other mod's block exposing NeoForge's
+   energy capability. If it has no valid output at all, or whatever it's
+   draining into is full (even 1 FE over remaining capacity), with no other
+   drain/ground path available, something ruptures. Plugging a foreign
+   mod's battery into the strike-catching spine and overloading it blows it
+   up too, same as ours — the danger is a property of catching raw
+   lightning, not of any specific block. See "Ball lightning" below for
+   what a rupture actually does.
+9. **Terrain-frequency classification: hybrid.** Elevation (surface Y /
+   local prominence at the strike column) sets the base frequency
+   multiplier; biome tags (`#minecraft:is_mountain`, badlands, savanna
+   plateau, etc.) stack an additional boost on top. Resolves the earlier
+   open question — elevation alone would have missed real named-biome
+   flavor, biome tags alone can't cover a plain that just happens to sit
+   high.
+10. **Strike power scale is anchored to a common FE mod's early battery,
+    not tuned only against our own blocks.** A raw strike needs to be able
+    to threaten to overflow a well-known mod's basic battery (e.g. a
+    Mekanism or Immersive Engineering starter battery), or locked decision
+    8's cross-mod danger never actually shows up in play. Exact numbers are
+    still an open question (see below) — this only locks in the *approach*.
 
 ## Phase 1 — MVP
 
@@ -105,26 +129,68 @@ Everything else depends on this existing first.
       vanilla (per decision 2) — this only changes how often a chunk gets
       picked at all.
 - [ ] Copper lightning rod behavior: catches the vanilla-redirected strike
-      (reuse/extend vanilla's existing copper lightning rod block).
-- [ ] Capacitor block: **craftable** power-storage block (not
-      world-generated) that charges when a strike lands on/near it or is
-      routed through a connected rod. Converts strike energy directly into
-      stored FE.
-- [ ] Capacitor visual: transparent shell with lightning arcing/bouncing
-      inside, visibly condensing/settling as charge climbs toward full.
-- [ ] Capacitor overload/rupture: if strike energy comes in faster than the
-      capacitor's contain rate (over capacity, or nothing drawing power off
-      it fast enough), it ruptures — explodes and releases a live ball
-      lightning entity as a hazard. First appearance of "ball lightning" as
-      a capacitor failure state, ahead of the standalone weather-phenomenon
-      version in the backlog below.
-- [ ] Capacitor banks: link multiple capacitor blocks into a multiblock (see
-      locked decision 7) to hold more than one strike's worth of charge.
-      Bigger banks store more but also scale the overload/rupture
-      consequence if mismanaged — a large bank going critical is a much
-      bigger event than a single capacitor popping.
-- [ ] Basic FE storage/output so the capacitor can power something, proving
-      the power spine end-to-end.
+      and redirects it into a connected capacitor (reuse/extend vanilla's
+      existing copper lightning rod block). The rod itself never generates
+      power — see the capacitor below for where conversion happens.
+- [ ] Capacitor block: sits between the rod and whatever stores the power.
+      Effectively infinite instantaneous intake — it never fails to catch a
+      strike no matter the size — converts raw voltage into FE and
+      immediately starts draining it out to whatever's connected downstream
+      (our cage battery, a foreign mod's FE storage, a machine, anything
+      with the energy capability). A meter on the side fills per strike and
+      drains back down as it pushes power out. If it has no valid output —
+      nothing connected, or the output path is destroyed — it can't drain
+      what it's holding, and *that* is the real overload trigger (see "Ball
+      lightning" below), not the capacitor running out of room.
+- [ ] Cage battery block (our own dedicated storage block, downstream of
+      the capacitor): **craftable**, not world-generated, charges from a
+      connected capacitor's output. Stores charge as a contained, tamed
+      ball lightning orb inside the cage rather than an abstract FE number
+      — purpose-built to hold one safely, unlike a generic battery, but
+      still capacity-limited: overfeeding it past full is its own overload
+      trigger (see "Ball lightning" below).
+- [ ] Cage battery visual: transparent/latticed shell with the caged orb
+      visibly arcing/bouncing and condensing as charge climbs toward full.
+- [ ] Cage battery tiers: expandable multiblock — 1x1, 2x2, 3x3, 4x4 and up
+      (see locked decision 7). Bigger cages are pricier but hold more bolts;
+      capacity scales with size, and so does the disaster if one goes
+      critical (see "Ball lightning" below).
+- [ ] Basic FE storage/output so the cage battery can power something,
+      proving the power spine end-to-end.
+
+## Ball lightning — the overload hazard
+
+The consequence of catching more strike energy than can safely be held.
+Not limited to our own blocks — see locked decision 8 — any FE storage
+overloaded with nowhere for the excess to go can trigger this.
+
+- [ ] Trigger, two paths to the same result:
+  - The **capacitor** has no valid output — nothing connected downstream,
+    or the output path got destroyed mid-storm — so it can't drain what
+    it just took in.
+  - Whatever the capacitor *is* draining into (cage battery, or a foreign
+    mod's FE storage) receives more than its remaining capacity (even 1 FE
+    over is enough), with no other drain/ground path available.
+  Either way: it ruptures — explodes, and releases a live ball lightning
+  orb.
+- [ ] Orb size scales with whatever ruptured — a single cage battery
+      popping is a small, containable orb; a large cage battery bank going
+      critical is a much bigger one.
+- [ ] Orb travel: roams under its own power and temporarily force-loads the
+      chunks it passes through (Create-train-style) so it keeps moving and
+      dealing damage even with no player nearby — a large enough orb can
+      travel far enough to reach and threaten another base entirely.
+- [ ] Orb destruction: breaks terrain and kills mobs/players along its path.
+- [ ] Orb attraction: drawn toward players, mobs, and copper rods.
+- [ ] Rod interaction: an orb can drain into a copper rod, but the rod
+      melts in the process (sacrificial, not a clean fix) — and if that rod
+      feeds a connected battery/bank, the drained power can overload *that*
+      battery too, chaining the disaster into another base's power grid.
+- [ ] Neutralizing an orb: draining it with dedicated apparatus (ties into
+      the late-game overflow relief valve in Phase 2) is the safe way to end
+      one before it reaches something else.
+
+Deliberately framed as a rare, devastating event, not a routine hazard.
 
 ## Phase 2 — power distribution & defense
 
@@ -136,10 +202,12 @@ Everything else depends on this existing first.
 - [ ] Chain armor rework: acts as an insulator/Faraday cage, letting the
       wearer safely stand near active large tesla coils.
 - [ ] Late-game overflow drain / relief valve: a multiblock addition to a
-      capacitor bank that bleeds excess charge off safely (e.g. into heat,
-      light, or a vanilla redstone pulse) once a bank nears its rupture
-      threshold — the payoff for investing in enough infrastructure to run
-      big banks without them going critical into ball lightning.
+      cage battery bank (or to a capacitor with no other output) that
+      bleeds excess charge off safely (e.g. into heat, light, or a vanilla
+      redstone pulse) once it nears its rupture threshold — the payoff for
+      investing in enough infrastructure to run big banks, or leave a
+      capacitor briefly unattended, without going critical into ball
+      lightning.
 
 ## Phase 3 — low-tier / flavor power source
 
@@ -164,34 +232,35 @@ other mods' APIs from day one.
 
 ## Backlog (explicitly later, not in early scope)
 
-- Ball lightning as a standalone weather phenomenon (independent of capacitor
-  overload — see Phase 1 for its first appearance as a failure state).
+- Ball lightning as a standalone weather phenomenon (independent of the
+  overload hazard — see the "Ball lightning" section above for its first
+  appearance as a failure state).
 - Handheld gun weapon with a ball-lightning attachment/ammo variant.
 
 ## Open questions to resolve as building starts
 
-- Exact FE storage/output tuning per tier (capacitor, small coil, large
-  coil).
+- Exact FE numbers: strike output, capacitor drain rate, cage battery
+  capacity per tier, small/large coil throughput — and specifically what
+  number makes a raw strike genuinely threaten to overflow a real reference
+  mod's basic battery (see locked decision 10 for the chosen approach; the
+  actual figures still need picking, likely against a specific target like
+  Mekanism's or Immersive Engineering's basic battery capacity).
+- Ball lightning orb travel: how far a large orb should realistically roam,
+  how long a force-loaded chunk stays loaded behind it, and how this is
+  actually implemented (Create's train chunk-loading is the reference point,
+  not something to copy wholesale).
+- Orb-neutralizing apparatus: what the "drain it safely" tool/block actually
+  is and what tier it unlocks at (see late-game overflow relief valve in
+  Phase 2).
 - Large tesla coil damage/range balance and multiplayer griefing
   considerations (unshielded players near an enemy's coil).
-- Whether the copper rod itself generates power on a direct hit, or strictly
-  redirects visually while all generation happens at the capacitor block
-  (leaning: rod redirects only, capacitor generates — keeps power logic in
-  one place).
-- Block/item designs for the capacitor, tesla coils, and converter (visual
-  design not yet started).
+- Block/item designs for the rod, capacitor, cage battery, tesla coils, and
+  converter (visual design not yet started).
 - Exact recipe shapes/ingredient costs per block, once block designs are
   locked (see recipe principles in locked decision 6).
-- Final mod name/branding (currently "Playing With Static").
-- Terrain-frequency classification: vanilla has a `#minecraft:is_mountain`
-  biome tag (Meadow, Grove, Snowy Slopes, Jagged/Frozen/Stony Peaks,
-  Windswept Hills/Forest/Gravelly Hills), but no tag for "plateau" or "high
-  plain" — those read more as elevation/flatness at a spot than a biome
-  identity (e.g. Savanna Plateau is a biome, but a plain simply sitting at
-  high Y isn't). Decide whether classification is biome-tag-based,
-  terrain-height-based (surface Y / local prominence at the strike column),
-  or a mix — and what the actual frequency multipliers should be per
-  category.
+- Terrain frequency multiplier values: locked decision 9 sets the
+  *approach* (elevation base + biome tag boost), but not the actual numbers
+  per terrain category yet.
 - Research real-world lightning-protection siting: utilities and
   researchers deliberately place freestanding rods/masts out in open fields,
   away from structures, with their own isolated grounding grid, for safety.
@@ -212,6 +281,10 @@ other mods' APIs from day one.
        effect, still respect vanilla's own rod-redirect and frequency, at the
        same `LIFE_TICKS=10` pacing as Sunwell's bolt.
 5. [ ] Add FE capability to a new capacitor block; wire a strike-landed event
-       (from the mixin/entity hook) to charge it.
-6. [ ] From there, layer in tesla coils, chain armor changes, sheep static
+       (from the mixin/entity hook, via the rod) to feed it. Give it the
+       infinite-intake/output-meter behavior from Phase 1, and wire the
+       no-valid-output rupture path.
+6. [ ] Add FE capability to a new cage battery block downstream of the
+       capacitor; wire the over-capacity rupture path.
+7. [ ] From there, layer in tesla coils, chain armor changes, sheep static
        pins.

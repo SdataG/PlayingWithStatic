@@ -4,7 +4,11 @@
     "package": "com.SdataG.playingwithstatic.mixin",
     "compatibilityLevel": "JAVA_21",
     "mixins": [],
-    "client": [],
+    "client": [
+        "client.LightningBoltRendererMixin",
+        "client.LightningBoltSoundMixin",
+        "client.LightningFlashLightMixin"
+    ],
     "injectors": {
         "defaultRequire": 1
     }
