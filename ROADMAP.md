@@ -18,6 +18,21 @@ Design north star: lean on real Nikola Tesla-era electrical concepts
 where they fill an actual mechanical gap vanilla doesn't already cover — not
 a generic tech-mod clone.
 
+Balance philosophy: a real strike delivers a lot of power but is rare and
+storm-gated (vanilla frequency, not reimplemented — see locked decision 2),
+so the power spine rewards infrastructure built to catch and hold an
+uncertain, bursty supply — capacitor banks, overflow handling — rather than
+steady drip-feed generation like most tech mods' generators.
+
+Plays like a reactor, but an *early*-game one: a single copper rod and
+capacitor is cheap and gets you a huge burst of power the moment a storm
+rolls in — no tech-tree gate like most mods put in front of their
+high-output/high-risk generators. The risk (rupture into ball lightning)
+is the tradeoff for that early access, and it scales with how much you're
+trying to hold (bank size) rather than with tier — so "meltdown" containment
+investment (banks, relief valves) is a choice players make in response to
+how much power they're chasing, not a fixed late-game unlock.
+
 ## Prior art / reference (Sunwell repo — read, don't copy wholesale)
 
 - `SunwellBoltRenderer` — jagged/branching bolt renderer, recursive
@@ -34,14 +49,20 @@ a generic tech-mod clone.
 
 1. **Separate repo, own NeoForge mod, own mod_id** (`playingwithstatic`).
    Target MC 1.21.1 to match Sunwell's current branch unless later changed.
-2. **No custom targeting or strike-frequency logic.** Vanilla already rolls
-   strike chance during storms and redirects to the nearest eligible
-   lightning rod before the `LightningBolt` entity spawns. By the time the
-   entity exists, its position is already the final, rod-aware target.
-   Mixin-cancel vanilla's render of that entity and only render a custom
-   growth animation from sky down to the entity's already-known position.
-   Branches during growth are cosmetic surface-seeking flavor, not real
-   targeting.
+2. **Targeting within a chunk stays vanilla; frequency across chunks gets
+   terrain-aware.** Vanilla already picks strike *location* via heightmap
+   (highest block in the column) and redirects to the highest-in-column
+   lightning rod within 128 blocks — that part is not reimplemented, and by
+   the time the `LightningBolt` entity exists its position is already the
+   final, rod-aware target. Mixin-cancel vanilla's render of that entity and
+   only render a custom growth animation from sky down to the entity's
+   already-known position; branches during growth stay cosmetic
+   surface-seeking flavor, not real targeting.
+   What *is* added: a frequency multiplier layered on top of vanilla's
+   per-chunk-per-tick strike roll, biased by terrain — mountains, plateaus,
+   and high plains get struck more often; low-elevation/sheltered terrain
+   less. Environment affects how often a chunk gets picked for a strike
+   attempt, never where within that chunk the bolt lands.
 3. **Sky origin point** = same X/Z as the vanilla strike position, projected
    up to sky height; leader grows straight down to the entity's actual Y
    (which may already be a rod's position).
@@ -65,12 +86,24 @@ a generic tech-mod clone.
    - Avoid shapes/ingredient sets that closely mirror other popular tech
      mods' machine-frame recipes (Mekanism, Immersive Engineering, Create,
      Applied Energistics) to keep this from clashing or reading derivative.
+7. **Multiblock construction.** Most Phase 2+ devices (tesla coils,
+   capacitor banks, induction pads, redstone bridge, voltmeter) are built by
+   assembling smaller component blocks into a multiblock, not delivered as a
+   single always-on block. This is also how capacity scales — a bank is
+   several capacitor blocks linked together, not one block with a bigger
+   number.
 
 ## Phase 1 — MVP
 
 Everything else depends on this existing first.
 
 - [ ] Branching sky-to-surface lightning VFX (per locked decisions above).
+- [ ] Terrain-aware strike frequency: hook vanilla's per-chunk-per-tick
+      strike roll and apply a terrain-based multiplier during storms —
+      boosted for mountains, plateaus, and high plains; standard or reduced
+      elsewhere. Location selection within the chosen chunk stays 100%
+      vanilla (per decision 2) — this only changes how often a chunk gets
+      picked at all.
 - [ ] Copper lightning rod behavior: catches the vanilla-redirected strike
       (reuse/extend vanilla's existing copper lightning rod block).
 - [ ] Capacitor block: **craftable** power-storage block (not
@@ -85,6 +118,11 @@ Everything else depends on this existing first.
       lightning entity as a hazard. First appearance of "ball lightning" as
       a capacitor failure state, ahead of the standalone weather-phenomenon
       version in the backlog below.
+- [ ] Capacitor banks: link multiple capacitor blocks into a multiblock (see
+      locked decision 7) to hold more than one strike's worth of charge.
+      Bigger banks store more but also scale the overload/rupture
+      consequence if mismanaged — a large bank going critical is a much
+      bigger event than a single capacitor popping.
 - [ ] Basic FE storage/output so the capacitor can power something, proving
       the power spine end-to-end.
 
@@ -97,6 +135,11 @@ Everything else depends on this existing first.
         (mobs/players) that get close.
 - [ ] Chain armor rework: acts as an insulator/Faraday cage, letting the
       wearer safely stand near active large tesla coils.
+- [ ] Late-game overflow drain / relief valve: a multiblock addition to a
+      capacitor bank that bleeds excess charge off safely (e.g. into heat,
+      light, or a vanilla redstone pulse) once a bank nears its rupture
+      threshold — the payoff for investing in enough infrastructure to run
+      big banks without them going critical into ball lightning.
 
 ## Phase 3 — low-tier / flavor power source
 
@@ -140,6 +183,22 @@ other mods' APIs from day one.
 - Exact recipe shapes/ingredient costs per block, once block designs are
   locked (see recipe principles in locked decision 6).
 - Final mod name/branding (currently "Playing With Static").
+- Terrain-frequency classification: vanilla has a `#minecraft:is_mountain`
+  biome tag (Meadow, Grove, Snowy Slopes, Jagged/Frozen/Stony Peaks,
+  Windswept Hills/Forest/Gravelly Hills), but no tag for "plateau" or "high
+  plain" — those read more as elevation/flatness at a spot than a biome
+  identity (e.g. Savanna Plateau is a biome, but a plain simply sitting at
+  high Y isn't). Decide whether classification is biome-tag-based,
+  terrain-height-based (surface Y / local prominence at the strike column),
+  or a mix — and what the actual frequency multipliers should be per
+  category.
+- Research real-world lightning-protection siting: utilities and
+  researchers deliberately place freestanding rods/masts out in open fields,
+  away from structures, with their own isolated grounding grid, for safety.
+  Worth mining for mechanics — e.g. a large coil or collector tower placed
+  away from a base being safer/more reliable than one bolted onto it, or a
+  dedicated "field pole" structure players are incentivized to build
+  off-base rather than a pure defense-turret framing.
 
 ## Build steps
 
