@@ -1,0 +1,30 @@
+# Gradle / Forge
+.gradle/
+build/
+bin/
+out/
+run/
+*.log
+
+# IDE / editor
+.idea/
+*.iml
+*.ipr
+*.iws
+.classpath
+.project
+.settings/
+.vscode/
+.cursor/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Machine-specific gradle overrides (e.g. instance_mods_dir)
+gradle-local.properties
+
+# Generated mixin refmap (emitted into build/ and the jar at build time)
+/playingwithstatic.refmap.json
+
+.gstack/
