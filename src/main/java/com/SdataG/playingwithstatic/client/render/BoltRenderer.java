@@ -318,6 +318,10 @@ public final class BoltRenderer {
         float offsetZ = Float.isNaN(cloudOffset.x) ? Mth.sin(originAngle) * originDist : cloudOffset.z;
         Vector3f top = new Vector3f(offsetX, h, offsetZ);
         Vector3f bottom = new Vector3f(0.0F, 0.0F, 0.0F); // strike = bolt's own position (local origin)
+        // Branches scale off this rather than fixed block counts (see drawBranches) -- the trunk's
+        // actual length now varies a lot more than it used to (skyOriginY targets the real cloud layer,
+        // not a fixed 80-block offset), so a fixed branch length reads as tiny on a much taller trunk.
+        float trunkLength = new Vector3f(top).sub(bottom).length();
 
         float age = bolt.tickCount + partialTick;
         float t = age / LIFE_TICKS;
@@ -369,10 +373,13 @@ public final class BoltRenderer {
             baseA = 0.5F;
             pulseC = 1.0F - u; // frac 1 = strike, frac 0 = sky: the band runs hit -> sky
             pulseA = 2.2F;
-            // Branches never get the flash -- only the trunk, which is structurally the one that
-            // reaches the actual strike point (locked decision 2), does. That's the reveal: every
-            // candidate channel looked the same while growing, and now it's obvious which one struck.
-            branchBright = 0.0F;
+            // Branches stay visible and fully grown through the strike -- real lightning's whole branch
+            // structure finishes forming BEFORE the return stroke fires, so a photo taken at the flash
+            // shows the complete tree, not just the trunk. Only the trunk gets the extra flash below
+            // (pulseA), on top of this same baseline brightness -- that's the reveal: every candidate
+            // channel looked the same while growing, and now it's obvious which one struck, without the
+            // others vanishing.
+            branchBright = baseA * 0.95F;
             skyGlow = 1.0F;
             cloudGlow = 0.7F; // brightens with the return-stroke flash
             impactLight = 1.0F;
@@ -409,10 +416,13 @@ public final class BoltRenderer {
 
         // Occasional major fork: a second channel nearly as bright and thick as the trunk itself,
         // growing alongside it -- real lightning often has more than one candidate "stepped leader"
-        // advancing at once. Only drawn during the leader phase, same "ambiguous, no flash" rule as
-        // ordinary branches (see drawBranches): it vanishes rather than flashing once the trunk connects,
-        // since the trunk is structurally the one that reaches the actual strike point.
-        if (t < LEADER_END && random.nextFloat() < MAJOR_SPLIT_CHANCE) {
+        // advancing at once. Stays visible and fully grown through the strike and fade, same as ordinary
+        // branches (see drawBranches) and for the same reason: by the time of the return stroke, real
+        // lightning's whole branch structure (major and minor) has already finished forming -- a photo
+        // taken at the flash shows the complete tree. It just never gets the trunk's own extra flash
+        // (splitA tracks baseA, which already brightens per phase same as the trunk's own baseA does,
+        // without the additional pulseA on top).
+        if (random.nextFloat() < MAJOR_SPLIT_CHANCE) {
             float splitOriginFrac = 0.15F + random.nextFloat() * 0.4F;
             int splitIdx = Mth.clamp(Math.round(splitOriginFrac * (path.length - 1)), 0, path.length - 1);
             float splitAngle = random.nextFloat() * (float) (Math.PI * 2.0);
@@ -429,8 +439,8 @@ public final class BoltRenderer {
             // growing before the trunk's own leader even reaches its origin point.
             float splitReach = Mth.clamp((reach - splitOriginFrac) / (1.0F - splitOriginFrac), 0.0F, 1.0F);
             float splitA = baseA * 0.85F;
-            drawChannel(buffer, matrix, splitPath, splitSides, HALO_WIDTH * 0.85F, 0.7F, 0.82F, 1.0F, splitReach, 0.32F * splitA, 0.0F, pulseW, 0.0F, 0.0F);
-            drawChannel(buffer, matrix, splitPath, splitSides, CORE_WIDTH * 0.85F, 0.97F, 0.98F, 1.0F, splitReach, splitA * 1.3F, 0.0F, pulseW, 0.0F, 0.0F);
+            drawChannel(buffer, matrix, splitPath, splitSides, HALO_WIDTH * 0.85F, 0.7F, 0.82F, 1.0F, splitReach, 0.32F * splitA, 0.0F, pulseW, 0.0F, closeFrac);
+            drawChannel(buffer, matrix, splitPath, splitSides, CORE_WIDTH * 0.85F, 0.97F, 0.98F, 1.0F, splitReach, splitA * 1.3F, 0.0F, pulseW, 0.0F, closeFrac);
         }
 
         if (pulseA > 0.0F) {
@@ -444,7 +454,7 @@ public final class BoltRenderer {
         if (branchBright > 0.05F) {
             Vector3f boltWorldPos = new Vector3f((float) bolt.getX(), (float) bolt.getY(), (float) bolt.getZ());
             BranchTargets targets = targetsFor(bolt);
-            drawBranches(buffer, matrix, camera, random, path, branchBright, reach, level, boltWorldPos, closeFrac, targets);
+            drawBranches(buffer, matrix, camera, random, path, branchBright, reach, level, boltWorldPos, closeFrac, targets, trunkLength);
         }
 
         // Cloud glow: a large, soft, violet-tinted halo around the sky origin, much bigger and dimmer
@@ -649,7 +659,7 @@ public final class BoltRenderer {
      */
     private static void drawBranches(VertexConsumer buffer, Matrix4f matrix, Vector3f camera, RandomSource random,
                                      Vector3f[] path, float bright, float reach, Level level, Vector3f worldOrigin,
-                                     float closeFrac, BranchTargets targets) {
+                                     float closeFrac, BranchTargets targets, float trunkLength) {
         int last = path.length - 1;
         int count = 7 + random.nextInt(6); // 7-12 primaries -- fuller, more "veiny" fan than before
         for (int i = 0; i < count; i++) {
@@ -673,9 +683,11 @@ public final class BoltRenderer {
             Vector3f dir = new Vector3f(tan).mul(forward).add(out.mul(spread));
             dir.add(0.0F, -0.3F, 0.0F).normalize();
             float topFactor = 1.0F - originFrac;
-            // Short relative to the trunk (max ~11 blocks vs. an ~80-block trunk, roughly matching the
-            // proportions in real photos) instead of the near-half-trunk-length a previous pass left.
-            float len = (3.0F + random.nextFloat() * 5.0F) * (0.5F + topFactor * 0.9F);
+            // Scaled off the trunk's own actual length (roughly 6-14%, matching real photo proportions)
+            // rather than a fixed block count -- the trunk's length now varies a lot more than it used
+            // to (skyOriginY targets the real cloud layer, not a fixed 80-block offset), so a fixed
+            // length reads as tiny on a much taller trunk.
+            float len = trunkLength * (0.06F + random.nextFloat() * 0.08F) * (0.5F + topFactor * 0.9F);
             int branchDepth = topFactor > 0.6F ? 3 : (topFactor > 0.35F ? 2 : (topFactor > 0.15F ? 1 : 0));
 
             Vector3f bestDir = dir;

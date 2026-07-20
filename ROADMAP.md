@@ -124,10 +124,14 @@ how much power they're chasing, not a fixed late-game unlock.
      1) render at almost the same brightness as the trunk while growing —
      real lightning has multiple candidate "stepped leaders" advancing at
      once, similarly dim, and you can't tell which one will connect until
-     it does. Only the trunk gets the big return-stroke flash; branches and
-     the major fork simply aren't drawn during that beat at all, so the
-     reveal is which channel is suddenly, obviously brighter — not a
-     dim-vs-bright difference the whole time.
+     it does. They stay visible and fully grown through the return stroke
+     and fade rather than vanishing — by the time of the actual flash, real
+     lightning's whole branch structure has already finished forming, so a
+     photo taken at that moment shows the complete tree, not just the
+     trunk. Only the trunk gets the extra flash on top of that same
+     baseline brightness (the return-stroke pulse), so the reveal is which
+     channel is suddenly, obviously *brighter* — not which one is visible
+     at all.
 5. **Power system**: Forge Energy (FE) — the standard most Create-adjacent
    electric mods interop with — plus a rotational↔FE converter block for
    direct Create kinetic-stress integration. Create is a soft/optional
@@ -206,9 +210,13 @@ Everything else depends on this existing first.
 - [x] Branching sky-to-surface lightning VFX (per locked decisions above) —
       implemented, including entity-aware branch reach and a rod > living
       entity > tree attraction hierarchy (decision 2). Branch length/angle
-      corrected against real lightning photography: short (~10-15% of the
-      trunk's own length) and fanning widely away from the trunk's own
-      direction, rather than a handful of long channels running near-
+      corrected against real lightning photography: short (~6-14% of the
+      trunk's own *actual* length, scaled dynamically rather than a fixed
+      block count — the trunk's length varies a lot more now that its sky
+      origin targets the real cloud layer instead of a fixed offset, and a
+      fixed branch length read as tiny on a much taller trunk) and fanning
+      widely away from the trunk's own direction, rather than a handful of
+      long channels running near-
       parallel to it. A large soft cloud glow at the sky origin (radius
       ~22/11 blocks — sized to actually read as an illuminated patch of
       cloud now that the origin sits at the real cloud layer, decision 3),
