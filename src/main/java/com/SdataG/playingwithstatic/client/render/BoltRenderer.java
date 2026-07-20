@@ -51,10 +51,11 @@ public final class BoltRenderer {
      *  share the same X/Z, so this is what actually gives the channel its arch instead of a razor-
      *  straight drop; the branches fork off this same bowed path. Floored and capped so a very short
      *  or very tall drop still reads as a proper arc rather than none at all or an absurd sideways lean.
-     *  Fraction/min/max all 2x their first pass. */
-    private static final float BOW_FRACTION = 0.30F;
-    private static final float BOW_MIN = 0.7F;
-    private static final float BOW_MAX = 32.0F;
+     *  A previous "2x" pass on this pushed the arc too far for a long diagonal trunk (up to ~25 blocks
+     *  of sideways bow on an ~85-block channel) -- pulled back to a less extreme lean. */
+    private static final float BOW_FRACTION = 0.14F;
+    private static final float BOW_MIN = 0.5F;
+    private static final float BOW_MAX = 15.0F;
 
     /** Thin bright core, soft glow, and a wide luminous bloom (the photo look). Whole effect is 2x
      *  Sunwell's original SunwellBoltRenderer sizing (0.035/0.018/0.13/0.42) -- a sky-to-ground bolt
@@ -66,36 +67,49 @@ public final class BoltRenderer {
     private static final float HALO_WIDTH = 0.26F;
     private static final float BLOOM_WIDTH = 0.84F;
 
-    /** How far above the strike the leader visually originates from. Capped by the level's actual
-     *  build height so it never reaches for a point that doesn't exist (e.g. the Nether). */
-    private static final float SKY_HEIGHT_ABOVE = 80.0F;
+    /** Chance per bolt of an occasional major fork -- a second channel nearly as bright/thick as the
+     *  trunk, not the usual thin offshoots (see drawBranches). */
+    private static final float MAJOR_SPLIT_CHANCE = 0.35F;
+
+    /** Vanilla's own fixed overworld cloud render height (confirmed in
+     *  {@code DimensionSpecialEffects.OverworldEffects}, {@code CLOUD_LEVEL = 192}). The sky origin
+     *  targets this height directly (see {@link #tryRender}) so the leader visually originates at/from
+     *  the real cloud layer instead of an arbitrary offset that too often sat well below where clouds
+     *  actually render. */
+    private static final float CLOUD_LEVEL = 192.0F;
+
+    /** Minimum height above the strike the sky origin sits at, even when the strike itself is already
+     *  above {@link #CLOUD_LEVEL} (a tall player build) -- the leader always visibly falls at least this
+     *  far. Also used as the fallback cap headroom below the level's real build height. */
+    private static final float MIN_HEIGHT_ABOVE_STRIKE = 40.0F;
 
     /** How far horizontally the sky origin can land from the strike's own X/Z (0 = directly overhead).
      *  Random per bolt within this radius -- a genuine long reach across the sky instead of a straight
      *  top-to-bottom drop every time. */
     private static final float SKY_RADIUS = 30.0F;
 
-    /** Whole VFX length in ticks. Was a flat 10 (locked decision 4, matching Sunwell's timing); bumped
-     *  to 14 to give the leader stage more room, per request. NOT doubled to 20: vanilla's own
-     *  {@code LightningBolt} entity has no fixed lifespan -- its {@code life} counter can discard the
-     *  entity as early as ~8-9 ticks in an unlucky case (a short random "flashes" count of 1 with a fast
-     *  flicker-retry roll), so 10 was already close to that floor. 14 keeps real margin under that risk
-     *  while still meaningfully lengthening the animation; pushing further risks bolts visibly vanishing
-     *  mid-fade on the unlucky rolls. */
-    private static final float LIFE_TICKS = 14.0F;
+    /** Whole VFX length in ticks. Was a flat 10 (locked decision 4, matching Sunwell's timing). A
+     *  previous pass bumped this to 14 with the leader stage taking 65%, which put the return stroke at
+     *  tick ~9 -- too close to (and evidently sometimes past) vanilla's own {@code LightningBolt}
+     *  entity's real worst-case lifespan (its {@code life}/{@code flashes} counters can discard it as
+     *  early as ~8-9 ticks on an unlucky roll), causing bolts to sometimes get discarded before ever
+     *  visibly reaching the ground. Pulled back to 11 ticks / tick ~6 for the return stroke, a safer
+     *  margin under that floor while still slightly longer than the original 10/5. */
+    private static final float LIFE_TICKS = 11.0F;
 
-    /** Beat boundaries over the life: spread (leader), strike (return), fade after. Leader now takes
-     *  ~65% of the life (was 50%) and eases in — see {@link #LEADER_EASE_POWER} -- slow near the sky
-     *  origin, accelerating as it nears the ground, instead of a constant linear crawl. Return-stroke
-     *  pulse width kept close to its old absolute ~1.8-tick duration so the "snap" still reads as quick
-     *  against the now-longer buildup. */
-    private static final float LEADER_END = 0.65F;
-    private static final float RETURN_END = 0.78F;
+    /** Beat boundaries over the life: spread (leader), strike (return), fade after. Leader eases in --
+     *  see {@link #LEADER_EASE_POWER} -- slow near the sky origin, accelerating as it nears the ground,
+     *  instead of a constant linear crawl. */
+    private static final float LEADER_END = 0.55F;
+    private static final float RETURN_END = 0.69F;
 
     /** Power curve for the leader's growth fraction within its own phase: {@code reach = u^power}, where
-     *  u is 0..1 progress through the leader phase. 1.0 = linear (the old behavior); higher = slower
-     *  start (near the sky origin), faster finish (near the ground) -- an ease-in, not a constant crawl. */
-    private static final float LEADER_EASE_POWER = 2.2F;
+     *  u is 0..1 progress through the leader phase. 1.0 = linear; higher = slower start (near the sky
+     *  origin), faster finish (near the ground). A previous pass used 2.2, which -- combined with the
+     *  longer leader phase above -- kept `reach` too low for too much of the entity's real (short)
+     *  lifespan for most branches (spread across originFrac 0.12-0.9) to ever get a chance to grow.
+     *  1.5 keeps a real ease-in feel without starving branches of the reach they need. */
+    private static final float LEADER_EASE_POWER = 1.5F;
 
     /** The tick the return stroke lands on — when the thunder/impact sound should play. */
     public static final int STRIKE_TICK = Math.round(LEADER_END * LIFE_TICKS);
@@ -141,6 +155,14 @@ public final class BoltRenderer {
      *  frame for a ~0.5s effect. Cleared alongside {@link BoltFlashLight#clear}. */
     private static final Map<Integer, BranchTargets> TARGET_CACHE = new ConcurrentHashMap<>();
 
+    /** Absolute Y the sky origin sits at: the real cloud layer for a typical ground-level strike, or
+     *  {@link #MIN_HEIGHT_ABOVE_STRIKE} above the strike itself if that's already higher (a tall build),
+     *  capped so it never reaches above the level's actual build height. */
+    private static float skyOriginY(float strikeY, int maxBuildHeight) {
+        float desired = Math.max(strikeY + MIN_HEIGHT_ABOVE_STRIKE, CLOUD_LEVEL);
+        return Math.min(desired, maxBuildHeight - 1.0F);
+    }
+
     private static BranchTargets targetsFor(LightningBolt bolt) {
         return TARGET_CACHE.computeIfAbsent(bolt.getId(), id -> {
             Level level = bolt.level();
@@ -148,9 +170,10 @@ public final class BoltRenderer {
             BlockPos rod = findNearestMatch(level, strike, ROD_SEEK_RADIUS, state -> state.is(Blocks.LIGHTNING_ROD));
             BlockPos tree = findNearestMatch(level, strike, TREE_SEEK_RADIUS, state -> state.is(BlockTags.LOGS));
             int r = (int) ENTITY_SEEK_RADIUS;
+            float skyY = skyOriginY(strike.getY(), level.getMaxBuildHeight());
             AABB searchBox = new AABB(
                     strike.getX() - r, strike.getY(), strike.getZ() - r,
-                    strike.getX() + 1 + r, strike.getY() + SKY_HEIGHT_ABOVE, strike.getZ() + 1 + r);
+                    strike.getX() + 1 + r, skyY, strike.getZ() + 1 + r);
             List<AABB> living = level.getEntitiesOfClass(LivingEntity.class, searchBox)
                     .stream()
                     .map(LivingEntity::getBoundingBox)
@@ -236,12 +259,12 @@ public final class BoltRenderer {
 
         // Sky origin: a random point within SKY_RADIUS blocks horizontally of the strike (updated
         // locked decision 3 -- was a straight vertical drop, same X/Z as the strike; now a genuine long
-        // reach across the sky instead of top-to-bottom directly overhead), at a fixed visual height.
-        // Capped by the level's real build height so a strike near the world ceiling doesn't reach for
-        // a point above it.
+        // reach across the sky instead of top-to-bottom directly overhead), at the real cloud layer's
+        // height (see skyOriginY) so it visually originates from where clouds actually render instead of
+        // an arbitrary offset.
         int maxBuildHeight = level.getMaxBuildHeight();
         float boltY = (float) bolt.getY();
-        float h = Math.max(1.0F, Math.min(SKY_HEIGHT_ABOVE, maxBuildHeight - boltY));
+        float h = Math.max(1.0F, skyOriginY(boltY, maxBuildHeight) - boltY);
         float originAngle = random.nextFloat() * (float) (Math.PI * 2.0);
         float originDist = random.nextFloat() * SKY_RADIUS;
         Vector3f top = new Vector3f(Mth.cos(originAngle) * originDist, h, Mth.sin(originAngle) * originDist);
@@ -276,7 +299,11 @@ public final class BoltRenderer {
             float u = Mth.clamp(t / LEADER_END, 0.0F, 1.0F);
             reach = (float) Math.pow(u, LEADER_EASE_POWER);
             baseA = 0.30F * flick;
-            branchBright = baseA * 0.9F;
+            // Almost the same brightness as the trunk itself while growing -- real lightning has
+            // several candidate "stepped leaders" advancing at once, similarly dim, and you can't tell
+            // which one will actually connect until it does. Only the trunk gets the big flash below,
+            // at the moment it strikes.
+            branchBright = baseA * 0.95F;
             skyGlow = 0.12F + reach * 0.55F;
             // Not tied to `reach`/`u` -- present at full strength from the very first rendered frame,
             // before the leader has visibly grown at all, so the cloud reads as already lit up/charging
@@ -293,6 +320,9 @@ public final class BoltRenderer {
             baseA = 0.5F;
             pulseC = 1.0F - u; // frac 1 = strike, frac 0 = sky: the band runs hit -> sky
             pulseA = 2.2F;
+            // Branches never get the flash -- only the trunk, which is structurally the one that
+            // reaches the actual strike point (locked decision 2), does. That's the reveal: every
+            // candidate channel looked the same while growing, and now it's obvious which one struck.
             branchBright = 0.0F;
             skyGlow = 1.0F;
             cloudGlow = 0.7F; // brightens with the return-stroke flash
@@ -328,6 +358,32 @@ public final class BoltRenderer {
         drawChannel(buffer, matrix, path, sides, CORE_WIDTH, 0.97F, 0.98F, 1.0F, reach, baseA * 1.3F, pulseC, pulseW, pulseA * 1.8F, closeFrac);
         drawChannel(buffer, matrix, path, sides, CORE_HOT_WIDTH, 1.0F, 1.0F, 1.0F, reach, baseA * 1.7F, pulseC, pulseW, pulseA * 2.2F, closeFrac);
 
+        // Occasional major fork: a second channel nearly as bright and thick as the trunk itself,
+        // growing alongside it -- real lightning often has more than one candidate "stepped leader"
+        // advancing at once. Only drawn during the leader phase, same "ambiguous, no flash" rule as
+        // ordinary branches (see drawBranches): it vanishes rather than flashing once the trunk connects,
+        // since the trunk is structurally the one that reaches the actual strike point.
+        if (t < LEADER_END && random.nextFloat() < MAJOR_SPLIT_CHANCE) {
+            float splitOriginFrac = 0.15F + random.nextFloat() * 0.4F;
+            int splitIdx = Mth.clamp(Math.round(splitOriginFrac * (path.length - 1)), 0, path.length - 1);
+            float splitAngle = random.nextFloat() * (float) (Math.PI * 2.0);
+            float splitDist = 3.0F + random.nextFloat() * 7.0F;
+            // Lands a few blocks from the actual strike, not on top of it -- a visibly different
+            // candidate path, not a duplicate of the winning one.
+            Vector3f splitBottom = new Vector3f(
+                    bottom.x + Mth.cos(splitAngle) * splitDist,
+                    1.0F + random.nextFloat() * 2.0F,
+                    bottom.z + Mth.sin(splitAngle) * splitDist);
+            Vector3f[] splitPath = buildPath(random, path[splitIdx], splitBottom);
+            Vector3f[] splitSides = computeSides(splitPath, camera);
+            // Own growth, relative to where this channel starts along the trunk, so it doesn't finish
+            // growing before the trunk's own leader even reaches its origin point.
+            float splitReach = Mth.clamp((reach - splitOriginFrac) / (1.0F - splitOriginFrac), 0.0F, 1.0F);
+            float splitA = baseA * 0.85F;
+            drawChannel(buffer, matrix, splitPath, splitSides, HALO_WIDTH * 0.85F, 0.7F, 0.82F, 1.0F, splitReach, 0.32F * splitA, 0.0F, pulseW, 0.0F, 0.0F);
+            drawChannel(buffer, matrix, splitPath, splitSides, CORE_WIDTH * 0.85F, 0.97F, 0.98F, 1.0F, splitReach, splitA * 1.3F, 0.0F, pulseW, 0.0F, 0.0F);
+        }
+
         if (pulseA > 0.0F) {
             // 2x Sunwell's original 1.7/0.75.
             int pulseIdx = Mth.clamp(Math.round(pulseC * (path.length - 1)), 0, path.length - 1);
@@ -345,8 +401,10 @@ public final class BoltRenderer {
         // Cloud glow: a large, soft, violet-tinted halo around the sky origin, much bigger and dimmer
         // than the tight sky-end glow below -- the storm cloud itself lighting up, not the bolt's own
         // point-source flare. Drawn first so the tighter, brighter glow reads as sitting inside it.
-        drawGlow(buffer, matrix, camera, path[0], 6.0F, cloudGlow * 0.5F, 0.55F, 0.6F, 0.9F);
-        drawGlow(buffer, matrix, camera, path[0], 3.2F, cloudGlow * 0.8F, 0.7F, 0.75F, 0.95F);
+        // Sized to actually read as an illuminated patch of cloud (radii in blocks) now that the origin
+        // sits at the real cloud layer (skyOriginY) instead of a much closer, arbitrary height.
+        drawGlow(buffer, matrix, camera, path[0], 22.0F, cloudGlow * 0.45F, 0.55F, 0.6F, 0.9F);
+        drawGlow(buffer, matrix, camera, path[0], 11.0F, cloudGlow * 0.75F, 0.7F, 0.75F, 0.95F);
 
         // Sky-end glow: brightens as the leader charges down, flares at the strike, then fades.
         // 2x Sunwell's original 0.55/0.26.
@@ -534,6 +592,11 @@ public final class BoltRenderer {
      * running near-parallel to the trunk for most of its length (which is what branches noticeably
      * longer than roughly 10-15% of the trunk's own length, with a strong bias to keep going in the
      * trunk's own direction, actually reads as).</p>
+     *
+     * <p>Brightness beat (set by the caller via {@code bright}): almost the same as the trunk while
+     * growing -- so it's genuinely ambiguous which channel will connect -- and never lit during the
+     * return-stroke flash, since only the trunk (structurally the one that reaches the actual strike
+     * point) does. Branches simply aren't drawn at all during that beat ({@code bright} is 0).</p>
      */
     private static void drawBranches(VertexConsumer buffer, Matrix4f matrix, Vector3f camera, RandomSource random,
                                      Vector3f[] path, float bright, float reach, Level level, Vector3f worldOrigin,

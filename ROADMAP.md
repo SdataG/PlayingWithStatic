@@ -81,21 +81,40 @@ how much power they're chasing, not a fixed late-game unlock.
 3. **Sky origin point** = a random point within a 30-block horizontal
    radius of the vanilla strike position (updated from the original
    straight-overhead version — a genuine long reach across the sky instead
-   of a top-to-bottom drop every time), at a fixed visual height; leader
-   grows from there down to the entity's actual Y (which may already be a
-   rod's position). Still cosmetic only — the strike's actual X/Z/Y stays
-   exactly what vanilla decided (locked decision 2); only where the visual
-   leader starts from changed.
+   of a top-to-bottom drop every time), at vanilla's own fixed overworld
+   cloud render height (`CLOUD_LEVEL = 192`, confirmed in
+   `DimensionSpecialEffects.OverworldEffects`) rather than an arbitrary
+   offset above the strike — the leader now visibly originates from where
+   clouds actually render, not a height that too often sat below them.
+   Falls back to `strikeY + 40` if the strike itself is already above 192
+   (a tall player build), still capped by the level's real build height.
+   Bow/arc across the descent pulled back from an earlier "2x" pass that
+   made it lean too far. Still cosmetic only — the strike's actual X/Z/Y
+   stays exactly what vanilla decided (locked decision 2); only where the
+   visual leader starts from changed.
 4. **Timing**: three-beat structure (leader growth / return-stroke pulse /
-   fade), originally Sunwell's flat `LIFE_TICKS = 10`. Updated to 14 ticks
-   with the leader stage stretched to ~65% of the life (was 50%) and eased
-   in — slow near the sky origin, accelerating toward the ground — per
-   request. Not doubled to 20: vanilla's `LightningBolt` entity has no
-   fixed lifespan (its internal `life`/`flashes` counters can discard it as
-   early as ~8-9 ticks on an unlucky roll), so 10 was already close to that
-   floor; 14 keeps real margin under it. Thunder/sound retiming
-   (`BoltRenderer.STRIKE_TICK`) is computed from these constants, so it
-   stays in sync automatically.
+   fade), originally Sunwell's flat `LIFE_TICKS = 10`. A previous pass
+   bumped this to 14 with the leader taking ~65% of the life, which put the
+   return stroke at tick ~9 — too close to (and evidently sometimes past)
+   vanilla's own `LightningBolt` entity's real worst-case lifespan (its
+   `life`/`flashes` counters can discard it as early as ~8-9 ticks on an
+   unlucky roll), causing bolts to sometimes get discarded before ever
+   visibly reaching the ground, and starving most branches of the `reach`
+   they needed to ever appear. Pulled back to 11 ticks / tick ~6 for the
+   return stroke — a safer margin under that floor, still slightly longer
+   than the original 10/5 — and the leader's ease-in curve power reduced
+   from 2.2 to 1.5 so `reach` climbs at a usable pace throughout instead of
+   staying low for too much of the (short) entity lifespan. Thunder/sound
+   retiming (`BoltRenderer.STRIKE_TICK`) is computed from these constants,
+   so it stays in sync automatically.
+   - **Brightness beat**: branches and an occasional major fork (see Phase
+     1) render at almost the same brightness as the trunk while growing —
+     real lightning has multiple candidate "stepped leaders" advancing at
+     once, similarly dim, and you can't tell which one will connect until
+     it does. Only the trunk gets the big return-stroke flash; branches and
+     the major fork simply aren't drawn during that beat at all, so the
+     reveal is which channel is suddenly, obviously brighter — not a
+     dim-vs-bright difference the whole time.
 5. **Power system**: Forge Energy (FE) — the standard most Create-adjacent
    electric mods interop with — plus a rotational↔FE converter block for
    direct Create kinetic-stress integration. Create is a soft/optional
@@ -177,10 +196,15 @@ Everything else depends on this existing first.
       corrected against real lightning photography: short (~10-15% of the
       trunk's own length) and fanning widely away from the trunk's own
       direction, rather than a handful of long channels running near-
-      parallel to it. A large soft cloud glow at the sky origin, present
-      from the bolt's very first rendered frame (not tied to leader
+      parallel to it. A large soft cloud glow at the sky origin (radius
+      ~22/11 blocks — sized to actually read as an illuminated patch of
+      cloud now that the origin sits at the real cloud layer, decision 3),
+      present from the bolt's very first rendered frame (not tied to leader
       growth), reads as the storm cloud lighting up before/as the leader
-      emerges from it.
+      emerges from it. A chance per bolt (`MAJOR_SPLIT_CHANCE = 0.35`) of a
+      second major fork nearly as bright/thick as the trunk itself (not the
+      usual thin offshoots), landing a few blocks from the actual strike —
+      a second candidate "stepped leader," per decision 4's brightness beat.
 - [x] Terrain-aware strike frequency — implemented per locked decision 9's
       height/climate formula (`TerrainStrikeFrequencyMixin`, redirects the
       bound of `ServerLevel#tickChunk`'s own strike roll). Location
