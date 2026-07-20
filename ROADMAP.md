@@ -61,9 +61,18 @@ how much power they're chasing, not a fixed late-game unlock.
    as: a branch raycasts against block collision *and* nearby living
    entities (mobs/players), stopping at whichever it reaches first instead
    of visibly passing through a mob or player the way it would through
-   thin air; and if a copper rod is within range, branches are weighted
-   (not forced) to reach toward it, so a rod nearby noticeably pulls
-   branches its way but a branch can still land elsewhere less often.
+   thin air; and branches are weighted (never forced) toward an attraction
+   hierarchy when one is in range — a copper rod first, then a living
+   entity (mob/player — this mod's own fiction already treats living
+   things as better conductors than blocks, see the tesla coil design),
+   then a tree — so the highest-priority target present noticeably pulls
+   branches its way, but a branch can still land elsewhere, or on a
+   lower-priority target, less often. This is the full answer to "does it
+   favor a strike location": *within* the vanilla-chosen chunk, this
+   hierarchy is the only favoring that exists, and it's purely cosmetic —
+   see decision 9 below for the *other* half, how often a chunk is picked
+   at all. No separate custom-targeting system was built beyond these two;
+   locked decision 2 (vanilla owns the actual strike position) still holds.
    What *is* added: a frequency multiplier layered on top of vanilla's
    per-chunk-per-tick strike roll, biased by terrain — mountains, plateaus,
    and high plains get struck more often; low-elevation/sheltered terrain
@@ -163,8 +172,15 @@ how much power they're chasing, not a fixed late-game unlock.
 Everything else depends on this existing first.
 
 - [x] Branching sky-to-surface lightning VFX (per locked decisions above) —
-      implemented, including entity-aware branch reach and rod-attraction
-      bias (decision 2).
+      implemented, including entity-aware branch reach and a rod > living
+      entity > tree attraction hierarchy (decision 2). Branch length/angle
+      corrected against real lightning photography: short (~10-15% of the
+      trunk's own length) and fanning widely away from the trunk's own
+      direction, rather than a handful of long channels running near-
+      parallel to it. A large soft cloud glow at the sky origin, present
+      from the bolt's very first rendered frame (not tied to leader
+      growth), reads as the storm cloud lighting up before/as the leader
+      emerges from it.
 - [x] Terrain-aware strike frequency — implemented per locked decision 9's
       height/climate formula (`TerrainStrikeFrequencyMixin`, redirects the
       bound of `ServerLevel#tickChunk`'s own strike roll). Location
