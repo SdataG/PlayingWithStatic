@@ -69,6 +69,11 @@ public final class BoltRenderer {
      *  build height so it never reaches for a point that doesn't exist (e.g. the Nether). */
     private static final float SKY_HEIGHT_ABOVE = 80.0F;
 
+    /** How far horizontally the sky origin can land from the strike's own X/Z (0 = directly overhead).
+     *  Random per bolt within this radius -- a genuine long reach across the sky instead of a straight
+     *  top-to-bottom drop every time. */
+    private static final float SKY_RADIUS = 30.0F;
+
     /** Whole VFX length in ticks (~half a second at 20 tps) -- locked decision 4, matches Sunwell's
      *  timing so thunder/sound retiming logic stays compatible without rework. */
     private static final float LIFE_TICKS = 10.0F;
@@ -92,8 +97,10 @@ public final class BoltRenderer {
     private static final float ROD_MAGNETISM = 1.6F;
 
     /** Horizontal search radius for mobs/players branches should visibly react to, same as blocks.
-     *  Vertical range is the full sky-origin height, since branches can occur anywhere along it. */
-    private static final float ENTITY_SEEK_RADIUS = 20.0F;
+     *  Vertical range is the full sky-origin height, since branches can occur anywhere along it.
+     *  Padded past SKY_RADIUS: the channel's sky end can itself land up to SKY_RADIUS off the strike's
+     *  own X/Z, and branches near that end reach a bit further out again. */
+    private static final float ENTITY_SEEK_RADIUS = SKY_RADIUS + 10.0F;
 
     /**
      * What a bolt's branches should visually reach for or stop at, beyond plain block collision:
@@ -176,13 +183,21 @@ public final class BoltRenderer {
             return false;
         }
 
-        // Sky origin: same X/Z as the strike (locked decision 3), straight up from the bolt's own
-        // local position. Capped by the level's real build height so a strike near the world ceiling
-        // doesn't reach for a point above it.
+        // Seeded once per bolt id, drawn from in a fixed order every frame so the shape (including the
+        // sky-origin offset just below) holds still across the bolt's whole life instead of jittering.
+        RandomSource random = RandomSource.create(bolt.getId() * 31L);
+
+        // Sky origin: a random point within SKY_RADIUS blocks horizontally of the strike (updated
+        // locked decision 3 -- was a straight vertical drop, same X/Z as the strike; now a genuine long
+        // reach across the sky instead of top-to-bottom directly overhead), at a fixed visual height.
+        // Capped by the level's real build height so a strike near the world ceiling doesn't reach for
+        // a point above it.
         int maxBuildHeight = level.getMaxBuildHeight();
         float boltY = (float) bolt.getY();
         float h = Math.max(1.0F, Math.min(SKY_HEIGHT_ABOVE, maxBuildHeight - boltY));
-        Vector3f top = new Vector3f(0.0F, h, 0.0F);
+        float originAngle = random.nextFloat() * (float) (Math.PI * 2.0);
+        float originDist = random.nextFloat() * SKY_RADIUS;
+        Vector3f top = new Vector3f(Mth.cos(originAngle) * originDist, h, Mth.sin(originAngle) * originDist);
         Vector3f bottom = new Vector3f(0.0F, 0.0F, 0.0F); // strike = bolt's own position (local origin)
 
         float age = bolt.tickCount + partialTick;
@@ -239,7 +254,6 @@ public final class BoltRenderer {
 
         BoltFlashLight.update(bolt.getId(), strike, impactLight, flashRadius);
 
-        RandomSource random = RandomSource.create(bolt.getId() * 31L);
         VertexConsumer buffer = buffers.getBuffer(GlowRenderType.BOLT_GLOW);
         Matrix4f matrix = poseStack.last().pose();
         Vector3f camera = new Vector3f(
@@ -431,11 +445,12 @@ public final class BoltRenderer {
     private static final float REACH_MARGIN = 0.25F;
 
     private static final float BRANCH_GROWTH = 0.35F;
-    // 2x Sunwell's original reference lengths, so growth-speed pacing stays calibrated the same
-    // relative to the now-2x branch lengths below instead of every branch reading as "far away, lash
-    // out fast" once lengths doubled but the references classifying near/far didn't.
-    private static final float BRANCH_LEN_REFERENCE = 4.0F;
-    private static final float SUB_LEN_REFERENCE = 2.0F;
+    // 6x Sunwell's original reference lengths (2x from the earlier whole-effect pass, further 3x here
+    // alongside the branch-length bump below), so growth-speed pacing stays calibrated relative to the
+    // now much longer branches instead of every branch reading as "far away, lash out fast" once
+    // lengths grew but the references classifying near/far didn't.
+    private static final float BRANCH_LEN_REFERENCE = 12.0F;
+    private static final float SUB_LEN_REFERENCE = 6.0F;
     private static final float BRANCH_GROWTH_MIN = 0.12F;
     private static final float BRANCH_GROWTH_MAX = 0.9F;
 
@@ -471,9 +486,10 @@ public final class BoltRenderer {
             Vector3f dir = new Vector3f(tan).mul(forward).add(out.mul(spread));
             dir.add(0.0F, -0.3F, 0.0F).normalize();
             float topFactor = 1.0F - originFrac;
-            // 2x Sunwell's original (1.6 + rand*2.4) base length, so branches read proportionally as
-            // long as the main channel now reads thick, instead of looking stubby next to a bigger core.
-            float len = (3.2F + random.nextFloat() * 4.8F) * (0.65F + topFactor * 1.15F);
+            // 3x longer again on top of the earlier 2x pass (6x Sunwell's original 1.6 + rand*2.4 base
+            // length) -- since the strike location itself can't change (vanilla owns targeting, locked
+            // decision 2), reach for more drama through the cosmetic branches instead.
+            float len = (9.6F + random.nextFloat() * 14.4F) * (0.65F + topFactor * 1.15F);
             int branchDepth = topFactor > 0.6F ? 3 : (topFactor > 0.35F ? 2 : (topFactor > 0.15F ? 1 : 0));
 
             Vector3f bestDir = dir;

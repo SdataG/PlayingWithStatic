@@ -69,9 +69,14 @@ how much power they're chasing, not a fixed late-game unlock.
    and high plains get struck more often; low-elevation/sheltered terrain
    less. Environment affects how often a chunk gets picked for a strike
    attempt, never where within that chunk the bolt lands.
-3. **Sky origin point** = same X/Z as the vanilla strike position, projected
-   up to sky height; leader grows straight down to the entity's actual Y
-   (which may already be a rod's position).
+3. **Sky origin point** = a random point within a 30-block horizontal
+   radius of the vanilla strike position (updated from the original
+   straight-overhead version — a genuine long reach across the sky instead
+   of a top-to-bottom drop every time), at a fixed visual height; leader
+   grows from there down to the entity's actual Y (which may already be a
+   rod's position). Still cosmetic only — the strike's actual X/Z/Y stays
+   exactly what vanilla decided (locked decision 2); only where the visual
+   leader starts from changed.
 4. **Timing**: reuse Sunwell's `LIFE_TICKS = 10` three-beat structure (leader
    growth / return-stroke pulse / fade) so thunder/sound retiming logic stays
    compatible without rework.
