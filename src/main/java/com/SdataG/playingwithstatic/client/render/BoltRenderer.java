@@ -67,9 +67,13 @@ public final class BoltRenderer {
     private static final float HALO_WIDTH = 0.26F;
     private static final float BLOOM_WIDTH = 0.84F;
 
-    /** Chance per bolt of an occasional major fork -- a second channel nearly as bright/thick as the
-     *  trunk, not the usual thin offshoots (see drawBranches). */
-    private static final float MAJOR_SPLIT_CHANCE = 0.35F;
+    /** Independent chance, rolled once per slot, of a major fork -- a channel nearly as bright/thick as
+     *  the trunk, not the usual thin offshoots (see drawBranches). MAJOR_SPLIT_SLOTS slots at this
+     *  chance each means a bolt can have more than one (expected ~1.6 major forks per bolt at these
+     *  values, real lightning photos routinely show more than one prominent branch, not just the one
+     *  dominant trunk). */
+    private static final float MAJOR_SPLIT_CHANCE = 0.55F;
+    private static final int MAJOR_SPLIT_SLOTS = 3;
 
     /** Vanilla's own fixed overworld cloud render height (confirmed in
      *  {@code DimensionSpecialEffects.OverworldEffects}, {@code CLOUD_LEVEL = 192}). The sky origin
@@ -414,21 +418,25 @@ public final class BoltRenderer {
         drawChannel(buffer, matrix, path, sides, CORE_WIDTH, 0.97F, 0.98F, 1.0F, reach, baseA * 1.3F, pulseC, pulseW, pulseA * 1.8F, closeFrac);
         drawChannel(buffer, matrix, path, sides, CORE_HOT_WIDTH, 1.0F, 1.0F, 1.0F, reach, baseA * 1.7F, pulseC, pulseW, pulseA * 2.2F, closeFrac);
 
-        // Occasional major fork: a second channel nearly as bright and thick as the trunk itself,
-        // growing alongside it -- real lightning often has more than one candidate "stepped leader"
-        // advancing at once. Stays visible and fully grown through the strike and fade, same as ordinary
-        // branches (see drawBranches) and for the same reason: by the time of the return stroke, real
-        // lightning's whole branch structure (major and minor) has already finished forming -- a photo
-        // taken at the flash shows the complete tree. It just never gets the trunk's own extra flash
-        // (splitA tracks baseA, which already brightens per phase same as the trunk's own baseA does,
-        // without the additional pulseA on top).
-        if (random.nextFloat() < MAJOR_SPLIT_CHANCE) {
+        // Occasional major fork(s): channels nearly as bright and thick as the trunk itself, growing
+        // alongside it -- real lightning often has more than one candidate "stepped leader" advancing at
+        // once, and photos routinely show more than one prominent branch, not just the one dominant
+        // trunk. Each of MAJOR_SPLIT_SLOTS rolls independently, so a bolt can have zero, one, or several.
+        // Stay visible and fully grown through the strike and fade, same as ordinary branches (see
+        // drawBranches) and for the same reason: by the time of the return stroke, real lightning's whole
+        // branch structure (major and minor) has already finished forming -- a photo taken at the flash
+        // shows the complete tree. They just never get the trunk's own extra flash (splitA tracks baseA,
+        // which already brightens per phase same as the trunk's own baseA does, without pulseA on top).
+        for (int s = 0; s < MAJOR_SPLIT_SLOTS; s++) {
+            if (random.nextFloat() >= MAJOR_SPLIT_CHANCE) {
+                continue;
+            }
             float splitOriginFrac = 0.15F + random.nextFloat() * 0.4F;
             int splitIdx = Mth.clamp(Math.round(splitOriginFrac * (path.length - 1)), 0, path.length - 1);
             float splitAngle = random.nextFloat() * (float) (Math.PI * 2.0);
             float splitDist = 3.0F + random.nextFloat() * 7.0F;
             // Lands a few blocks from the actual strike, not on top of it -- a visibly different
-            // candidate path, not a duplicate of the winning one.
+            // candidate path, not a duplicate of the winning one (or of any other split this bolt has).
             Vector3f splitBottom = new Vector3f(
                     bottom.x + Mth.cos(splitAngle) * splitDist,
                     1.0F + random.nextFloat() * 2.0F,
@@ -661,7 +669,7 @@ public final class BoltRenderer {
                                      Vector3f[] path, float bright, float reach, Level level, Vector3f worldOrigin,
                                      float closeFrac, BranchTargets targets, float trunkLength) {
         int last = path.length - 1;
-        int count = 7 + random.nextInt(6); // 7-12 primaries -- fuller, more "veiny" fan than before
+        int count = 14 + random.nextInt(10); // 14-23 primaries -- bushier, closer to real photo density
         for (int i = 0; i < count; i++) {
             float originFrac = 0.12F + random.nextFloat() * 0.78F;
             int oi = Mth.clamp(Math.round(originFrac * last), 0, last);
@@ -782,7 +790,7 @@ public final class BoltRenderer {
             drawChannel(buffer, matrix, pts, sides, width, 0.9F, 0.94F, 1.0F, growth, bright, 0.0F, 0.1F, 0.0F, 0.55F);
         }
         if (depth > 0) {
-            int subs = random.nextInt(3);
+            int subs = random.nextInt(4); // 0-3 per level (was 0-2) -- denser sub-forking
             for (int k = 0; k < subs; k++) {
                 Vector3f origin = pts[Math.min(1 + random.nextInt(steps), steps)];
                 Vector3f sub = new Vector3f(dir).add(

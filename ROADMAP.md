@@ -229,10 +229,14 @@ Everything else depends on this existing first.
       cloud now that the origin sits at the real cloud layer, decision 3),
       present from the bolt's very first rendered frame (not tied to leader
       growth), reads as the storm cloud lighting up before/as the leader
-      emerges from it. A chance per bolt (`MAJOR_SPLIT_CHANCE = 0.35`) of a
-      second major fork nearly as bright/thick as the trunk itself (not the
-      usual thin offshoots), landing a few blocks from the actual strike —
-      a second candidate "stepped leader," per decision 4's brightness beat.
+      emerges from it. 3 independent slots at 55% each (`MAJOR_SPLIT_CHANCE`
+      /`MAJOR_SPLIT_SLOTS`, expected ~1.6 per bolt) of a major fork nearly
+      as bright/thick as the trunk itself (not the usual thin offshoots),
+      each landing a few blocks from the actual strike — real photos
+      routinely show more than one prominent branch, not just the trunk.
+      Per decision 4's brightness beat. Primary branch count bumped to
+      14-23 (was 7-12) and sub-forking density to 0-3 per level (was 0-2)
+      for a bushier, more photo-realistic density.
 - [x] Terrain-aware strike frequency — implemented per locked decision 9's
       height/climate formula (`TerrainStrikeFrequencyMixin`, redirects the
       bound of `ServerLevel#tickChunk`'s own strike roll). Location
