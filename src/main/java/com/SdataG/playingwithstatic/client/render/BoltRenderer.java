@@ -74,13 +74,27 @@ public final class BoltRenderer {
      *  top-to-bottom drop every time. */
     private static final float SKY_RADIUS = 30.0F;
 
-    /** Whole VFX length in ticks (~half a second at 20 tps) -- locked decision 4, matches Sunwell's
-     *  timing so thunder/sound retiming logic stays compatible without rework. */
-    private static final float LIFE_TICKS = 10.0F;
+    /** Whole VFX length in ticks. Was a flat 10 (locked decision 4, matching Sunwell's timing); bumped
+     *  to 14 to give the leader stage more room, per request. NOT doubled to 20: vanilla's own
+     *  {@code LightningBolt} entity has no fixed lifespan -- its {@code life} counter can discard the
+     *  entity as early as ~8-9 ticks in an unlucky case (a short random "flashes" count of 1 with a fast
+     *  flicker-retry roll), so 10 was already close to that floor. 14 keeps real margin under that risk
+     *  while still meaningfully lengthening the animation; pushing further risks bolts visibly vanishing
+     *  mid-fade on the unlucky rolls. */
+    private static final float LIFE_TICKS = 14.0F;
 
-    /** Beat boundaries over the 10-tick life: spread (leader) ticks 0-5, strike (return) 5-6.8, fade after. */
-    private static final float LEADER_END = 0.5F;
-    private static final float RETURN_END = 0.68F;
+    /** Beat boundaries over the life: spread (leader), strike (return), fade after. Leader now takes
+     *  ~65% of the life (was 50%) and eases in — see {@link #LEADER_EASE_POWER} -- slow near the sky
+     *  origin, accelerating as it nears the ground, instead of a constant linear crawl. Return-stroke
+     *  pulse width kept close to its old absolute ~1.8-tick duration so the "snap" still reads as quick
+     *  against the now-longer buildup. */
+    private static final float LEADER_END = 0.65F;
+    private static final float RETURN_END = 0.78F;
+
+    /** Power curve for the leader's growth fraction within its own phase: {@code reach = u^power}, where
+     *  u is 0..1 progress through the leader phase. 1.0 = linear (the old behavior); higher = slower
+     *  start (near the sky origin), faster finish (near the ground) -- an ease-in, not a constant crawl. */
+    private static final float LEADER_EASE_POWER = 2.2F;
 
     /** The tick the return stroke lands on — when the thunder/impact sound should play. */
     public static final int STRIKE_TICK = Math.round(LEADER_END * LIFE_TICKS);
@@ -223,7 +237,10 @@ public final class BoltRenderer {
         float pulseW = 0.16F;
         float pulseA = 0.0F;
         if (t < LEADER_END) {
-            reach = Mth.clamp(t / LEADER_END, 0.0F, 1.0F);
+            // Ease-in: slow growth right after leaving the sky origin, accelerating as it nears the
+            // ground, instead of a constant linear crawl the whole leader phase.
+            float u = Mth.clamp(t / LEADER_END, 0.0F, 1.0F);
+            reach = (float) Math.pow(u, LEADER_EASE_POWER);
             baseA = 0.30F * flick;
             branchBright = baseA * 0.9F;
             skyGlow = 0.12F + reach * 0.55F;

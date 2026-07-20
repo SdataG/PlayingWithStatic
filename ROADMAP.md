@@ -77,9 +77,16 @@ how much power they're chasing, not a fixed late-game unlock.
    rod's position). Still cosmetic only — the strike's actual X/Z/Y stays
    exactly what vanilla decided (locked decision 2); only where the visual
    leader starts from changed.
-4. **Timing**: reuse Sunwell's `LIFE_TICKS = 10` three-beat structure (leader
-   growth / return-stroke pulse / fade) so thunder/sound retiming logic stays
-   compatible without rework.
+4. **Timing**: three-beat structure (leader growth / return-stroke pulse /
+   fade), originally Sunwell's flat `LIFE_TICKS = 10`. Updated to 14 ticks
+   with the leader stage stretched to ~65% of the life (was 50%) and eased
+   in — slow near the sky origin, accelerating toward the ground — per
+   request. Not doubled to 20: vanilla's `LightningBolt` entity has no
+   fixed lifespan (its internal `life`/`flashes` counters can discard it as
+   early as ~8-9 ticks on an unlucky roll), so 10 was already close to that
+   floor; 14 keeps real margin under it. Thunder/sound retiming
+   (`BoltRenderer.STRIKE_TICK`) is computed from these constants, so it
+   stays in sync automatically.
 5. **Power system**: Forge Energy (FE) — the standard most Create-adjacent
    electric mods interop with — plus a rotational↔FE converter block for
    direct Create kinetic-stress integration. Create is a soft/optional
