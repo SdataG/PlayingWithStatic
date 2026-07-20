@@ -149,7 +149,9 @@ Everything else depends on this existing first.
       drains back down as it pushes power out. If it has no valid output —
       nothing connected, or the output path is destroyed — it can't drain
       what it's holding, and *that* is the real overload trigger (see "Ball
-      lightning" below), not the capacitor running out of room.
+      lightning" below), not the capacitor running out of room. Own model
+      added — geometry only for now, with a fitted hitbox (not a full cube)
+      and a solid-color placeholder texture (no real art yet).
 - [ ] Cage battery block (our own dedicated storage block, downstream of
       the capacitor): **craftable**, not world-generated, charges from a
       connected capacitor's output. Stores charge as a contained, tamed
@@ -221,10 +223,15 @@ Deliberately framed as a rare, devastating event, not a routine hazard.
 
 - [ ] Static collector: a block that wraps around a placed copper lightning
       rod (own model added — geometry only for now, same as the capacitor).
-      Generates power but does **not** store it — a very low, passive
-      trickle fed by ambient static in its immediate surroundings: mobs
-      walking on/near it, carpet, and other nearby items. Storm-independent,
-      like the sheep/cat sources below, and feeds whatever the rod is
+      Only survives directly under a placed copper rod — pops off if the
+      rod above it is removed, and can't be placed anywhere else. Fitted
+      hitbox (a narrow central column) rather than a full-cube one, and a
+      solid-color placeholder texture (no real art yet) instead of the
+      missing-texture checkerboard. Generates power but does **not** store
+      it — a very low, passive trickle fed by ambient static in its
+      immediate surroundings: mobs walking on/near it, carpet, and other
+      nearby items. Storm-independent, like the sheep/cat sources below,
+      and feeds whatever the rod is
       connected to (a capacitor) rather than holding charge itself.
 - [ ] Sheep static pins: penned sheep generate a tiny trickle of static
       charge (wool friction) — early-game power source that doesn't require
