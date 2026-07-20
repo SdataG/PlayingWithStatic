@@ -1,5 +1,6 @@
 package com.SdataG.playingwithstatic.client.render;
 
+import com.SdataG.playingwithstatic.integration.SunwellCompat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
@@ -166,6 +167,14 @@ public final class BoltRenderer {
     public static boolean tryRender(LightningBolt bolt, float partialTick, PoseStack poseStack, MultiBufferSource buffers) {
         Level level = bolt.level();
         BlockPos strike = bolt.blockPosition();
+
+        // Defer entirely to Sunwell for its own lamp-triggered strikes (see SunwellCompat) -- draw
+        // nothing, don't cancel vanilla's render, so Sunwell's own render-cancel mixin (an independent
+        // @Inject, not competing for anything) is free to draw its short lamp-to-ceiling bolt undisturbed
+        // instead of it getting stomped by our full sky-to-ground one.
+        if (SunwellCompat.isSunwellBolt(level, strike)) {
+            return false;
+        }
 
         // Sky origin: same X/Z as the strike (locked decision 3), straight up from the bolt's own
         // local position. Capped by the level's real build height so a strike near the world ceiling

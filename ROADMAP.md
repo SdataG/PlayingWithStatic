@@ -246,15 +246,24 @@ other mods' APIs from day one.
 - [ ] Create: New Age compat.
 - [ ] Other FE-based power mods as they come up (e.g. Mekanism, Immersive
       Engineering) — energy interop, not full feature parity.
-- [ ] Sunwell compat: both mods redirect the identical
-      `Level.playLocalSound` call on `LightningBolt.tick` to retime thunder
-      to their own strike moment. `@Redirect` claims a specific instruction
-      — only one mod can win it. Currently both sides are `require = 0` so
-      losing the race degrades to doubled thunder instead of crashing (this
-      crashed the game before that fix — see build history), but the real
-      fix is coordinating which mod owns the redirect, or restructuring so
-      they don't collide at all (e.g. one mod detects the other's presence
-      and defers).
+- [ ] Sunwell compat, partially done: added `SunwellCompat` (reflection,
+      no compile-time dependency) so this mod's renderer and sound mixin
+      detect a Sunwell-owned lamp strike and defer to it entirely — no more
+      stomping Sunwell's lamp bolt with our sky bolt, no more doubling its
+      retimed thunder. What's still open: both mods `@Redirect` the
+      identical `Level.playLocalSound` call on `LightningBolt.tick` — only
+      one mod's redirect can physically claim that instruction. Ours is
+      `require = 0` (a lost race no-ops instead of crashing — this crashed
+      the game before that fix, see build history), but if *Sunwell's*
+      redirect wins the race instead of ours, vanilla's early sound plays
+      unmuted for genuine sky strikes (Sunwell only mutes its own) while our
+      own strike-tick thunder still plays on top — occasional doubled
+      thunder for sky strikes specifically. Can't be forced deterministic
+      from this side alone: Sunwell's own redirect doesn't have
+      `require = 0`, so forcing ours to always win would just move this
+      exact crash onto Sunwell instead. Closing this needs a Sunwell-side
+      change too (its own `require = 0`, and ideally the same ownership
+      hand-off convention in reverse).
 
 ## Backlog (explicitly later, not in early scope)
 
