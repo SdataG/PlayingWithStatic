@@ -114,13 +114,29 @@ how much power they're chasing, not a fixed late-game unlock.
    up too, same as ours — the danger is a property of catching raw
    lightning, not of any specific block. See "Ball lightning" below for
    what a rupture actually does.
-9. **Terrain-frequency classification: hybrid.** Elevation (surface Y /
-   local prominence at the strike column) sets the base frequency
-   multiplier; biome tags (`#minecraft:is_mountain`, badlands, savanna
-   plateau, etc.) stack an additional boost on top. Resolves the earlier
-   open question — elevation alone would have missed real named-biome
-   flavor, biome tags alone can't cover a plain that just happens to sit
-   high.
+9. **Terrain-frequency classification: a continuous physics-inspired
+   formula, not biome tags.** Supersedes the earlier tag-based approach —
+   no vanilla tag exists for "plateau" or "high plain" anyway, and this
+   reads real atmospheric-physics stand-ins (elevation, temperature,
+   downfall) directly instead of trying to bucket biomes into categories.
+   Implemented (see Phase 1) as a redirect on `ServerLevel#tickChunk`'s own
+   `random.nextInt(100000) == 0` roll — since P = 1/bound, scale the bound
+   itself by the inverse of the multiplier below, sampled once per chunk
+   tick at that chunk's center (height + biome lookup only, no per-block
+   cost):
+   - `P = B · M_height · M_climate`, `B = 1/100000` (vanilla's own base
+     chance, untouched).
+   - `M_height = 1 + α·(max(0, (Y-64)/(320-64)))²`, `α = 10`. Quadratic and
+     floored at sea level (Y=64) so it's gentle at ordinary mountain
+     heights (Y128 ≈1.6x, Y192 ≈3.5x) and only sharply punishing right at
+     the build limit (Y320 = 11x) — real risk for chasing max altitude
+     without penalizing normal mountain building, which this decision
+     otherwise wants to reward.
+   - `M_climate = 1 + β·(T·H)`, `β = 2.5`, using the sampled biome's
+     temperature (T) and downfall (H). Jungles/badlands (~3.1x) see more
+     strikes, snowy/dry biomes (as low as ~0.5x) see fewer — floored well
+     above zero so a very cold, humid biome can't produce a negative or
+     zero roll bound.
 10. **Strike power scale is anchored to a common FE mod's early battery,
     not tuned only against our own blocks.** A raw strike needs to be able
     to threaten to overflow a well-known mod's basic battery (e.g. a
@@ -135,12 +151,11 @@ Everything else depends on this existing first.
 - [x] Branching sky-to-surface lightning VFX (per locked decisions above) —
       implemented, including entity-aware branch reach and rod-attraction
       bias (decision 2).
-- [ ] Terrain-aware strike frequency: hook vanilla's per-chunk-per-tick
-      strike roll and apply a terrain-based multiplier during storms —
-      boosted for mountains, plateaus, and high plains; standard or reduced
-      elsewhere. Location selection within the chosen chunk stays 100%
-      vanilla (per decision 2) — this only changes how often a chunk gets
-      picked at all.
+- [x] Terrain-aware strike frequency — implemented per locked decision 9's
+      height/climate formula (`TerrainStrikeFrequencyMixin`, redirects the
+      bound of `ServerLevel#tickChunk`'s own strike roll). Location
+      selection within the chosen chunk stays 100% vanilla (per decision
+      2) — this only changes how often a chunk gets picked at all.
 - [ ] Copper lightning rod behavior: catches the vanilla-redirected strike
       and redirects it into a connected capacitor (reuse/extend vanilla's
       existing copper lightning rod block). The rod itself never generates
@@ -305,9 +320,6 @@ other mods' APIs from day one.
   converter (visual design not yet started).
 - Exact recipe shapes/ingredient costs per block, once block designs are
   locked (see recipe principles in locked decision 6).
-- Terrain frequency multiplier values: locked decision 9 sets the
-  *approach* (elevation base + biome tag boost), but not the actual numbers
-  per terrain category yet.
 - Research real-world lightning-protection siting: utilities and
   researchers deliberately place freestanding rods/masts out in open fields,
   away from structures, with their own isolated grounding grid, for safety.
