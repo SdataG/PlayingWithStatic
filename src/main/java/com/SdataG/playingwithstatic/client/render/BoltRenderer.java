@@ -703,7 +703,10 @@ public final class BoltRenderer {
             // to (skyOriginY targets the real cloud layer, not a fixed 80-block offset), so a fixed
             // length reads as tiny on a much taller trunk.
             float len = trunkLength * (0.06F + random.nextFloat() * 0.08F) * (0.5F + topFactor * 0.9F);
-            int branchDepth = topFactor > 0.6F ? 3 : (topFactor > 0.35F ? 2 : (topFactor > 0.15F ? 1 : 0));
+            // One deeper tier than before, and a floor of 1 instead of 0 -- every branch gets at least
+            // some fine sub-forking now (previously the ones closest to the ground got none at all),
+            // and the topmost branches get a new 4th level for finer "minor-minor" detail.
+            int branchDepth = topFactor > 0.7F ? 4 : (topFactor > 0.5F ? 3 : (topFactor > 0.3F ? 2 : 1));
 
             Vector3f bestDir = dir;
             float bestClear = clearDistance(level, worldOrigin, path[oi], dir, len, targets.nearbyLiving());

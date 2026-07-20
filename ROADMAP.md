@@ -240,7 +240,11 @@ Everything else depends on this existing first.
       reading as long as the bolt itself rather than a fork that peters out
       mid-air. Per decision 4's brightness beat. Primary branch count
       bumped to 14-23 (was 7-12) and sub-forking density to 0-3 per level
-      (was 0-2) for a bushier, more photo-realistic density.
+      (was 0-2) for a bushier, more photo-realistic density. Sub-forking
+      recursion deepened to 4 levels for the topmost branches (was 3), and
+      every branch now gets at least 1 level (was 0 for the ones closest to
+      the ground) — finer "minor" and "minor-minor" branches throughout,
+      not just near the sky end.
 - [x] Terrain-aware strike frequency — implemented per locked decision 9's
       height/climate formula (`TerrainStrikeFrequencyMixin`, redirects the
       bound of `ServerLevel#tickChunk`'s own strike roll). Location
