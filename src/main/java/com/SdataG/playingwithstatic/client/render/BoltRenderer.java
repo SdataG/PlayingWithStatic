@@ -433,15 +433,22 @@ public final class BoltRenderer {
             }
             float splitOriginFrac = 0.15F + random.nextFloat() * 0.4F;
             int splitIdx = Mth.clamp(Math.round(splitOriginFrac * (path.length - 1)), 0, path.length - 1);
+            Vector3f splitOrigin = path[splitIdx];
             float splitAngle = random.nextFloat() * (float) (Math.PI * 2.0);
             float splitDist = 3.0F + random.nextFloat() * 7.0F;
-            // Lands a few blocks from the actual strike, not on top of it -- a visibly different
-            // candidate path, not a duplicate of the winning one (or of any other split this bolt has).
-            Vector3f splitBottom = new Vector3f(
+            // Where this fork WOULD end if it ran the whole rest of the way to the ground, a few blocks
+            // from the actual strike (not on top of it -- a visibly different candidate path).
+            Vector3f towardGround = new Vector3f(
                     bottom.x + Mth.cos(splitAngle) * splitDist,
                     1.0F + random.nextFloat() * 2.0F,
                     bottom.z + Mth.sin(splitAngle) * splitDist);
-            Vector3f[] splitPath = buildPath(random, path[splitIdx], splitBottom);
+            // But it only covers a fraction of that distance -- a fork that noticeably peters out in
+            // mid-air, not a second channel nearly as long as the whole trunk. A fork originating high
+            // up (low splitOriginFrac) has a lot of "remaining trunk" below it; without this cap it would
+            // otherwise run almost the full remaining distance, reading as long as the bolt itself.
+            float splitLenFrac = 0.3F + random.nextFloat() * 0.4F;
+            Vector3f splitBottom = new Vector3f(splitOrigin).lerp(towardGround, splitLenFrac);
+            Vector3f[] splitPath = buildPath(random, splitOrigin, splitBottom);
             Vector3f[] splitSides = computeSides(splitPath, camera);
             // Own growth, relative to where this channel starts along the trunk, so it doesn't finish
             // growing before the trunk's own leader even reaches its origin point.

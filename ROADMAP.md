@@ -234,9 +234,13 @@ Everything else depends on this existing first.
       as bright/thick as the trunk itself (not the usual thin offshoots),
       each landing a few blocks from the actual strike — real photos
       routinely show more than one prominent branch, not just the trunk.
-      Per decision 4's brightness beat. Primary branch count bumped to
-      14-23 (was 7-12) and sub-forking density to 0-3 per level (was 0-2)
-      for a bushier, more photo-realistic density.
+      Length capped to 30-70% of the remaining distance from its own
+      origin to the ground, not the full remaining trunk length — a fork
+      starting high up otherwise ran nearly the whole rest of the way down,
+      reading as long as the bolt itself rather than a fork that peters out
+      mid-air. Per decision 4's brightness beat. Primary branch count
+      bumped to 14-23 (was 7-12) and sub-forking density to 0-3 per level
+      (was 0-2) for a bushier, more photo-realistic density.
 - [x] Terrain-aware strike frequency — implemented per locked decision 9's
       height/climate formula (`TerrainStrikeFrequencyMixin`, redirects the
       bound of `ServerLevel#tickChunk`'s own strike roll). Location
