@@ -106,20 +106,27 @@ how much power they're chasing, not a fixed late-game unlock.
    stays exactly what vanilla decided (locked decision 2); only where the
    visual leader starts from changed.
 4. **Timing**: three-beat structure (leader growth / return-stroke pulse /
-   fade), originally Sunwell's flat `LIFE_TICKS = 10`. A previous pass
-   bumped this to 14 with the leader taking ~65% of the life, which put the
-   return stroke at tick ~9 — too close to (and evidently sometimes past)
-   vanilla's own `LightningBolt` entity's real worst-case lifespan (its
-   `life`/`flashes` counters can discard it as early as ~8-9 ticks on an
-   unlucky roll), causing bolts to sometimes get discarded before ever
-   visibly reaching the ground, and starving most branches of the `reach`
-   they needed to ever appear. Pulled back to 11 ticks / tick ~6 for the
-   return stroke — a safer margin under that floor, still slightly longer
-   than the original 10/5 — and the leader's ease-in curve power reduced
-   from 2.2 to 1.5 so `reach` climbs at a usable pace throughout instead of
-   staying low for too much of the (short) entity lifespan. Thunder/sound
-   retiming (`BoltRenderer.STRIKE_TICK`) is computed from these constants,
-   so it stays in sync automatically.
+   fade), originally Sunwell's flat `LIFE_TICKS = 10`, now 11 ticks with the
+   leader's ease-in curve power at 1.5 (was tried at 14/2.2, which caused
+   the exact symptom below, and pulled back to 11/1.5 first as a tuning
+   attempt before the real fix below).
+   - **Root cause, actually fixed**: worked out the real math on vanilla's
+     `LightningBolt#tick` `life`/`flashes` retry logic (not assumed) — these
+     are plain unsynchronized ints, so client and server each roll their
+     own independent `RandomSource` for them, and the entity's true
+     worst-case lifespan is as short as **5 ticks** in a real, non-negligible
+     case (roughly 1 in 30 bolts) — much tighter than an earlier "~8-9
+     ticks" estimate. No fixed `LIFE_TICKS`/`LEADER_END` tuning can reliably
+     fit inside a window that short while still leaving room for a
+     meaningful leader-growth animation, so `LightningBoltLifespanMixin`
+     holds the entity's own `discard()` off (both client and server, since
+     either side's local roll could independently be the one that discards
+     early) until `MIN_LIFESPAN_TICKS` (kept equal to `LIFE_TICKS`) has
+     elapsed, skipped for Sunwell-owned bolts. This is what actually
+     guarantees the leader reaches the ground, rather than tuning constants
+     against a probability distribution. Thunder/sound retiming
+     (`BoltRenderer.STRIKE_TICK`) is computed from `LIFE_TICKS`/`LEADER_END`,
+     so it stays in sync automatically.
    - **Brightness beat**: branches and an occasional major fork (see Phase
      1) render at almost the same brightness as the trunk while growing —
      real lightning has multiple candidate "stepped leaders" advancing at

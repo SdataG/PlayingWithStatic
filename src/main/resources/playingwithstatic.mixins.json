@@ -4,7 +4,8 @@
     "package": "com.SdataG.playingwithstatic.mixin",
     "compatibilityLevel": "JAVA_21",
     "mixins": [
-        "TerrainStrikeFrequencyMixin"
+        "TerrainStrikeFrequencyMixin",
+        "LightningBoltLifespanMixin"
     ],
     "client": [
         "client.LightningBoltRendererMixin",
