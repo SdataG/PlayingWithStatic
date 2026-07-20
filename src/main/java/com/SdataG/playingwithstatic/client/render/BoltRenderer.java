@@ -75,6 +75,10 @@ public final class BoltRenderer {
     private static final float MAJOR_SPLIT_CHANCE = 0.55F;
     private static final int MAJOR_SPLIT_SLOTS = 3;
 
+    /** Number of smaller scattered glow blobs making up the cloud glow, instead of one large perfect
+     *  circle (see the cloud glow block in {@link #tryRender}). */
+    private static final int CLOUD_GLOW_BLOBS = 5;
+
     /** Vanilla's own fixed overworld cloud render height (confirmed in
      *  {@code DimensionSpecialEffects.OverworldEffects}, {@code CLOUD_LEVEL = 192}). The sky origin
      *  targets this height directly (see {@link #tryRender}) so the leader visually originates at/from
@@ -472,13 +476,24 @@ public final class BoltRenderer {
             drawBranches(buffer, matrix, camera, random, path, branchBright, reach, level, boltWorldPos, closeFrac, targets, trunkLength);
         }
 
-        // Cloud glow: a large, soft, violet-tinted halo around the sky origin, much bigger and dimmer
-        // than the tight sky-end glow below -- the storm cloud itself lighting up, not the bolt's own
-        // point-source flare. Drawn first so the tighter, brighter glow reads as sitting inside it.
-        // Sized to actually read as an illuminated patch of cloud (radii in blocks) now that the origin
-        // sits at the real cloud layer (skyOriginY) instead of a much closer, arbitrary height.
-        drawGlow(buffer, matrix, camera, path[0], 22.0F, cloudGlow * 0.45F, 0.55F, 0.6F, 0.9F);
-        drawGlow(buffer, matrix, camera, path[0], 11.0F, cloudGlow * 0.75F, 0.7F, 0.75F, 0.95F);
+        // Cloud glow: a scattered cluster of smaller, overlapping soft blobs around the sky origin,
+        // instead of one large perfectly circular halo -- a single clean sphere reads as a glowing ball
+        // floating in the sky, disconnected from the actual blocky, irregular cloud texture behind it.
+        // A lumpy cluster reads more like a patch of cloud lighting up from within. Scattered within the
+        // same rough footprint the old single blob covered, so it's not any smaller overall, just less
+        // uniform. One extra blob sits exactly at path[0] and isn't offset, so the brightest point still
+        // anchors where the leader visibly emerges from.
+        for (int i = 0; i < CLOUD_GLOW_BLOBS; i++) {
+            float blobAngle = random.nextFloat() * (float) (Math.PI * 2.0);
+            float blobDist = random.nextFloat() * 9.0F;
+            Vector3f blobPos = new Vector3f(path[0]).add(
+                    Mth.cos(blobAngle) * blobDist,
+                    (random.nextFloat() - 0.5F) * 5.0F,
+                    Mth.sin(blobAngle) * blobDist);
+            float blobRadius = 8.0F + random.nextFloat() * 8.0F;
+            drawGlow(buffer, matrix, camera, blobPos, blobRadius, cloudGlow * 0.3F, 0.55F, 0.6F, 0.9F);
+        }
+        drawGlow(buffer, matrix, camera, path[0], 9.0F, cloudGlow * 0.8F, 0.7F, 0.75F, 0.95F);
 
         // Sky-end glow: brightens as the leader charges down, flares at the strike, then fades.
         // 2x Sunwell's original 0.55/0.26.

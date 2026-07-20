@@ -1,7 +1,6 @@
 package com.SdataG.playingwithstatic.mixin;
 
 import com.SdataG.playingwithstatic.integration.SunwellCompat;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LightningBolt;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -38,11 +37,19 @@ public abstract class LightningBoltLifespanMixin {
      *  if that changes. */
     private static final int MIN_LIFESPAN_TICKS = 11;
 
+    /**
+     * Target is {@code LightningBolt;discard()V}, NOT {@code Entity;discard()V} where the method is
+     * actually declared -- confirmed by disassembling the real compiled class (javap), not assumed. The
+     * first attempt at this mixin used the declaring class and silently matched zero targets (masked by
+     * {@code require = 0}, so no crash, just a fix that never actually applied) because javac emits
+     * {@code this.discard()} here using the compile-time type of {@code this} (LightningBolt), not the
+     * class {@code discard()} happens to be declared in.
+     */
     @Redirect(
             method = "tick",
-            at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/Entity;discard()V"),
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/LightningBolt;discard()V"),
             require = 0)
-    private void playingwithstatic$holdForAnimation(Entity self) {
+    private void playingwithstatic$holdForAnimation(LightningBolt self) {
         if (self.tickCount < MIN_LIFESPAN_TICKS && !SunwellCompat.isSunwellBolt(self.level(), self.blockPosition())) {
             return; // not yet -- let our animation finish growing/striking/fading first
         }

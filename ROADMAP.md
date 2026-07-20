@@ -124,7 +124,17 @@ how much power they're chasing, not a fixed late-game unlock.
      early) until `MIN_LIFESPAN_TICKS` (kept equal to `LIFE_TICKS`) has
      elapsed, skipped for Sunwell-owned bolts. This is what actually
      guarantees the leader reaches the ground, rather than tuning constants
-     against a probability distribution. Thunder/sound retiming
+     against a probability distribution.
+     - **First attempt at this redirect silently never applied.** Targeted
+       `Entity;discard()V` (where `discard()` is declared) instead of
+       `LightningBolt;discard()V` (the actual invoke owner javac emits for
+       `this.discard()` inside `LightningBolt.tick()`, since it uses the
+       compile-time type of `this`, not the declaring class) — confirmed by
+       disassembling the real compiled class with `javap`, not assumed.
+       `require = 0` masked this as a silent no-op instead of a crash, so
+       the fix visibly did nothing (bolts kept vanishing before reaching
+       the ground) until this was caught and corrected.
+     Thunder/sound retiming
      (`BoltRenderer.STRIKE_TICK`) is computed from `LIFE_TICKS`/`LEADER_END`,
      so it stays in sync automatically.
    - **Brightness beat**: branches and an occasional major fork (see Phase
@@ -224,10 +234,14 @@ Everything else depends on this existing first.
       fixed branch length read as tiny on a much taller trunk) and fanning
       widely away from the trunk's own direction, rather than a handful of
       long channels running near-
-      parallel to it. A large soft cloud glow at the sky origin (radius
-      ~22/11 blocks — sized to actually read as an illuminated patch of
-      cloud now that the origin sits at the real cloud layer, decision 3),
-      present from the bolt's very first rendered frame (not tied to leader
+      parallel to it. A cloud glow at the sky origin — a scattered cluster
+      of ~5 smaller overlapping blobs (`CLOUD_GLOW_BLOBS`), not one large
+      perfect circle, since a single clean sphere reads as a glowing ball
+      floating in the sky rather than a patch of the actual (blocky,
+      irregular) cloud texture lighting up — sized to actually read as an
+      illuminated patch of cloud now that the origin sits at the real cloud
+      layer (decision 3), present from the bolt's very first rendered frame
+      (not tied to leader
       growth), reads as the storm cloud lighting up before/as the leader
       emerges from it. 3 independent slots at 55% each (`MAJOR_SPLIT_CHANCE`
       /`MAJOR_SPLIT_SLOTS`, expected ~1.6 per bolt) of a major fork nearly
