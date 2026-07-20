@@ -88,6 +88,12 @@ public final class BoltRenderer {
      *  top-to-bottom drop every time. */
     private static final float SKY_RADIUS = 30.0F;
 
+    /** How far out (blocks) to search for an actual cloud puff to align the sky origin with (see
+     *  {@link #cloudOffsetFor}), a bit past SKY_RADIUS to improve the odds of finding one. Falls back to
+     *  the plain random offset within SKY_RADIUS if nothing qualifies within this radius. */
+    private static final float CLOUD_SEARCH_RADIUS = 45.0F;
+    private static final float CLOUD_SEARCH_STEP = 6.0F;
+
     /** Whole VFX length in ticks. Was a flat 10 (locked decision 4, matching Sunwell's timing). A
      *  previous pass bumped this to 14 with the leader stage taking 65%, which put the return stroke at
      *  tick ~9 -- too close to (and evidently sometimes past) vanilla's own {@code LightningBolt}
@@ -184,6 +190,45 @@ public final class BoltRenderer {
 
     private static void clearTargets(int boltId) {
         TARGET_CACHE.remove(boltId);
+        CLOUD_OFFSET_CACHE.remove(boltId);
+    }
+
+    /** Sentinel for "searched, no qualifying cloud found nearby" -- {@link Map#computeIfAbsent} can't
+     *  store a real {@code null}, so a NaN-x marker distinguishes "not found" from "not yet searched"
+     *  without re-running the (fairly cheap, but non-trivial) search every frame. */
+    private static final Vector3f NO_CLOUD = new Vector3f(Float.NaN, 0.0F, 0.0F);
+
+    private static final Map<Integer, Vector3f> CLOUD_OFFSET_CACHE = new ConcurrentHashMap<>();
+
+    /**
+     * Horizontal offset (local, relative to the strike) of an actual cloud puff near the strike, for the
+     * sky origin to align with -- see {@link CloudTexture}. Computed once per bolt (cached, same
+     * reasoning as {@link #targetsFor}) via a concentric-ring search outward from the strike, closest
+     * candidates first, for a point solidly inside a puff (not just its edge). Returns {@link #NO_CLOUD}
+     * if nothing qualifies within {@link #CLOUD_SEARCH_RADIUS} -- callers fall back to a plain random
+     * offset in that case.
+     */
+    private static Vector3f cloudOffsetFor(LightningBolt bolt) {
+        return CLOUD_OFFSET_CACHE.computeIfAbsent(bolt.getId(), id -> {
+            BlockPos strike = bolt.blockPosition();
+            // The scroll drift over a bolt's whole ~11-tick life is under half a block (0.03/tick) --
+            // negligible, so evaluating once at spawn time rather than re-searching every frame is fine.
+            float gameTime = bolt.tickCount;
+            double centerX = strike.getX() + 0.5D;
+            double centerZ = strike.getZ() + 0.5D;
+            for (float r = 0.0F; r <= CLOUD_SEARCH_RADIUS; r += CLOUD_SEARCH_STEP) {
+                int ringSamples = r < 0.5F ? 1 : Math.max(6, Mth.ceil(r * 0.6F));
+                for (int i = 0; i < ringSamples; i++) {
+                    float angle = (float) (i * (Math.PI * 2.0) / ringSamples);
+                    double x = centerX + Mth.cos(angle) * r;
+                    double z = centerZ + Mth.sin(angle) * r;
+                    if (CloudTexture.isCloudCenter(x, z, gameTime)) {
+                        return new Vector3f((float) (x - centerX), 0.0F, (float) (z - centerZ));
+                    }
+                }
+            }
+            return NO_CLOUD;
+        });
     }
 
     /** Nearest block matching {@code matcher} to {@code center} within {@code radius}, or null. A
@@ -257,17 +302,21 @@ public final class BoltRenderer {
         // sky-origin offset just below) holds still across the bolt's whole life instead of jittering.
         RandomSource random = RandomSource.create(bolt.getId() * 31L);
 
-        // Sky origin: a random point within SKY_RADIUS blocks horizontally of the strike (updated
-        // locked decision 3 -- was a straight vertical drop, same X/Z as the strike; now a genuine long
-        // reach across the sky instead of top-to-bottom directly overhead), at the real cloud layer's
-        // height (see skyOriginY) so it visually originates from where clouds actually render instead of
-        // an arbitrary offset.
+        // Sky origin: at the real cloud layer's height (see skyOriginY) so it visually originates from
+        // where clouds actually render, not an arbitrary offset -- and horizontally, aligned with an
+        // actual rendered cloud puff (see cloudOffsetFor/CloudTexture) when one's found nearby, rather
+        // than a point that might land in a gap between clouds. Falls back to a random point within
+        // SKY_RADIUS blocks of the strike (updated locked decision 3 -- was a straight vertical drop,
+        // same X/Z as the strike; now a genuine long reach across the sky) if no cloud qualifies nearby.
         int maxBuildHeight = level.getMaxBuildHeight();
         float boltY = (float) bolt.getY();
         float h = Math.max(1.0F, skyOriginY(boltY, maxBuildHeight) - boltY);
         float originAngle = random.nextFloat() * (float) (Math.PI * 2.0);
         float originDist = random.nextFloat() * SKY_RADIUS;
-        Vector3f top = new Vector3f(Mth.cos(originAngle) * originDist, h, Mth.sin(originAngle) * originDist);
+        Vector3f cloudOffset = cloudOffsetFor(bolt);
+        float offsetX = Float.isNaN(cloudOffset.x) ? Mth.cos(originAngle) * originDist : cloudOffset.x;
+        float offsetZ = Float.isNaN(cloudOffset.x) ? Mth.sin(originAngle) * originDist : cloudOffset.z;
+        Vector3f top = new Vector3f(offsetX, h, offsetZ);
         Vector3f bottom = new Vector3f(0.0F, 0.0F, 0.0F); // strike = bolt's own position (local origin)
 
         float age = bolt.tickCount + partialTick;

@@ -88,6 +88,19 @@ how much power they're chasing, not a fixed late-game unlock.
    clouds actually render, not a height that too often sat below them.
    Falls back to `strikeY + 40` if the strike itself is already above 192
    (a tall player build), still capped by the level's real build height.
+   Horizontally, aligned with an actual rendered cloud puff when one's
+   found nearby (see `CloudTexture`) rather than a point that might land in
+   a gap between clouds: vanilla's clouds are a real texture
+   (`textures/environment/clouds.png`), not a solid plane -- confirmed by
+   reading the actual shipped 256x256 PNG, it's a hard-edged binary alpha
+   mask (fully transparent gap or fully opaque cloud, nothing in between).
+   Replicated vanilla's exact texel mapping from `LevelRenderer`'s own
+   source (1 texel = 12 blocks, horizontal scroll 0.03 blocks/tick, +0.33
+   fixed Z offset) rather than approximating it, and requires a texel's
+   full 8-neighbor ring to also be cloud before accepting a point, so the
+   origin lands solidly inside a puff, not right at its edge. Falls back to
+   a random point within `SKY_RADIUS` if no cloud qualifies within
+   `CLOUD_SEARCH_RADIUS` (45 blocks) -- clouds don't cover 100% of the sky.
    Bow/arc across the descent pulled back from an earlier "2x" pass that
    made it lean too far. Still cosmetic only — the strike's actual X/Z/Y
    stays exactly what vanilla decided (locked decision 2); only where the
