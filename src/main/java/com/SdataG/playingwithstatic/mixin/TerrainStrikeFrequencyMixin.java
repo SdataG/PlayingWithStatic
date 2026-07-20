@@ -32,6 +32,13 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  * above zero so a very cold+humid biome can't produce a negative or zero bound.</li>
  * </ul>
  *
+ * <p><b>Combined multiplier is capped</b> at {@code COMBINED_MULT_CAP}, separately from either factor's
+ * own individual range. Worst case, the two multiply: a Y320 jungle mountaintop would be
+ * {@code 11 * ~3.1 ≈ 34x} vanilla's base rate uncapped — a bolt every few seconds instead of an
+ * occasional dramatic event, which stops reading as "dangerous" and starts reading as "broken." The cap
+ * only bites when both factors are pushed toward their own extremes at once; either alone can still
+ * reach close to its individual max.</p>
+ *
  * <p>Sampled once per chunk-tick at that chunk's center, not per-block -- matches "how often a chunk
  * gets picked", not "where in it", and keeps the cost to one heightmap query and one biome lookup per
  * already-throttled random chunk tick.</p>
@@ -47,6 +54,12 @@ public abstract class TerrainStrikeFrequencyMixin {
 
     private static final float CLIMATE_BETA = 2.5F;
     private static final float CLIMATE_MULT_FLOOR = 0.05F;
+
+    /** Ceiling on the COMBINED height*climate multiplier -- roughly half the theoretical uncapped max
+     *  (~34x, a Y320 jungle mountaintop), so the worst-case stack still reads as "dangerous" rather than
+     *  "a bolt every few seconds." Each factor can still reach close to its own individual max alone;
+     *  this only bites when both are pushed toward their extremes at the same time. */
+    private static final float COMBINED_MULT_CAP = 15.0F;
 
     @Redirect(
             method = "tickChunk",
@@ -70,8 +83,9 @@ public abstract class TerrainStrikeFrequencyMixin {
         float heightMult = 1.0F + HEIGHT_ALPHA * heightFrac * heightFrac;
         float climateMult = Math.max(CLIMATE_MULT_FLOOR,
                 1.0F + CLIMATE_BETA * (climate.temperature() * climate.downfall()));
+        float combinedMult = Math.min(COMBINED_MULT_CAP, heightMult * climateMult);
 
-        int scaledBound = Math.max(1, Math.round(bound / (heightMult * climateMult)));
+        int scaledBound = Math.max(1, Math.round(bound / combinedMult));
         return random.nextInt(scaledBound);
     }
 }

@@ -137,6 +137,13 @@ how much power they're chasing, not a fixed late-game unlock.
      strikes, snowy/dry biomes (as low as ~0.5x) see fewer — floored well
      above zero so a very cold, humid biome can't produce a negative or
      zero roll bound.
+   - **Combined multiplier is capped at 15x**, separately from either
+     factor's own range — uncapped, the worst case multiplies (a Y320
+     jungle mountaintop would be `11 * ~3.1 ≈ 34x`, a bolt every few
+     seconds instead of an occasional dangerous event, which stops reading
+     as "dangerous" and starts reading as "broken"). The cap only bites
+     when both factors are pushed toward their own extremes at once —
+     either alone can still reach close to its individual max.
 10. **Strike power scale is anchored to a common FE mod's early battery,
     not tuned only against our own blocks.** A raw strike needs to be able
     to threaten to overflow a well-known mod's basic battery (e.g. a
